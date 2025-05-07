@@ -80,11 +80,20 @@ int main()
    Vector rhs(fespace2.GetVSize()); // Full-sized RHS
    ConstantCoefficient zero(0.0);
 
-   // Time-stepping loop
-   int cycle=1;
+    
+
+   std::string resultsFolder = "results/test3";
+   fs::create_directories(resultsFolder); 
+   ParaViewDataCollection pvdc("configFiles", &mesh2);
+   pvdc.SetPrefixPath(resultsFolder);      // Directory to save data
+   pvdc.SetLevelsOfDetail(order2);  // Optional: for visualization
+   pvdc.SetHighOrderOutput(true);   // Keep high-order info
+   pvdc.RegisterField("u", &u);    // Associate field with data collection
    
-
-
+ 
+ // Time-stepping loop
+ int cycle=1;
+  
    for (t = 0.0; t <= t_final; t += dt)
    {
       // Apply Dirichlet BCs
@@ -115,10 +124,14 @@ int main()
       u = u_new;
    
 
-	  std::string folder = "results/test2";
-     fs::create_directories(folder); 
+	
+
+
 	  if ((cycle % 10) == 0)  {
-		saveData(folder, cycle, u, nodes2);
+		saveData(resultsFolder, cycle, u, nodes2);
+		pvdc.SetCycle(cycle);   // Record time step number
+        pvdc.SetTime(t);       // Record simulation time
+        pvdc.Save();   
 	  }
 	cout<<"cycle\t:"<<cycle<<endl;
 	cycle++;
@@ -134,7 +147,9 @@ int main()
       u_data << x1 << " " << val << "\n";
    }
    u_data.close();
-
+   cout<<"saved output to "+resultsFolder<<endl;
+   cout<<"The  time period T is \t"<<T<<endl;
+   cout<<"The  simulation time is t_final is \t"<<t_final<<endl;
    return 0;
 }
 
@@ -156,6 +171,9 @@ oss << std::setw(5) << 						std::setfill('0') << cycle;
 	return;
 
 }
+
+
+
 
 // for (int i = 0; i < mesh.GetNV(); i++) // GetNV() gives the number of vertices
 //        {
