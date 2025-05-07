@@ -134,7 +134,7 @@ void saveData(const int cycle, const Vector& u, const GridFunction &nodes2){
 	std::ostringstream oss;
 oss << std::setw(5) << 						std::setfill('0') << cycle;
 	std::string padded = oss.str();  
-	std::ofstream u_out("u_data_t" + padded + ".txt");
+	std::ofstream u_out("results/u_data_t" + padded + ".dat");
 		
 		  for (int i = 0; i < u.Size(); i++)
 		  {
