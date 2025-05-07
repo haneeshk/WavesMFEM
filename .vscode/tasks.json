@@ -1,0 +1,48 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+	  {
+		"label": "Run my_wave_solver (no debug)",
+		"type": "shell",
+		"command": "${workspaceFolder}/build/my_wave_solver",
+		"group": {
+		  "kind": "test",
+		  "isDefault": true
+		},
+		"presentation": {
+		  "echo": true,
+		  "reveal": "always",
+		  "focus": false,
+		  "panel": "shared"
+		},
+		"problemMatcher": []
+	  },
+	  {
+		"label": "Build with CMake",
+		"type": "shell",
+		"command": "cmake",
+		"args": [
+		  "--build",
+		  "${workspaceFolder}/build"
+		],
+		"group": {
+		  "kind": "build",
+		  "isDefault": true
+		},
+		"problemMatcher": []
+	  },
+
+	  {
+	"label": "Build and Run my_wave_solver",
+	"type": "shell",
+	"command": "cmake --build build && ./build/my_wave_solver",
+		"group": {
+		  "kind": "build",
+		  "isDefault": true
+		},
+	"problemMatcher": ["$gcc"],
+	"detail": "Builds and runs the my_wave_solver executable."
+	  }
+
+	]
+  }

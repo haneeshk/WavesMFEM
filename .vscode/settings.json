@@ -1,0 +1,12 @@
+{
+	"cmake.generator": "Unix Makefiles",
+	"cmake.buildDirectory": "${workspaceFolder}/build",
+	"cmake.sourceDirectory": "${workspaceFolder}",
+	"cmake.buildTarget": "my_wave_solver",
+	"cmake.launchTargetPath": "${workspaceFolder}/build/my_wave_solver",
+	"cmake.launchBehavior": "launch",
+	"cmake.debugConfig": {
+	  "console": "integratedTerminal"
+	},
+	"cmake.debugConfigProvider": "cmake"
+  }

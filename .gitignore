@@ -1,0 +1,12 @@
+# Ignore .dat files
+*.dat
+
+# Optional: Ignore build artifacts
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Optional: Ignore executable
+my_wave_solver

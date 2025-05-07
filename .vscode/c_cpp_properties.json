@@ -1,0 +1,22 @@
+{
+	"configurations": [
+	  {
+		"name": "Mac",
+		"includePath": [
+		  "${workspaceFolder}",
+		  "${workspaceFolder}/../mfem",
+		  "${workspaceFolder}/../mfem/fem",
+		  "${workspaceFolder}/../mfem/linalg",
+		  "${workspaceFolder}/../mfem/general",
+		  "${workspaceFolder}/../mfem/mesh"
+		],
+		"defines": [],
+		"macFrameworkPath": [],
+		"compilerPath": "/usr/bin/clang++",
+		"cStandard": "c17",
+		"cppStandard": "c++17",
+		"intelliSenseMode": "macos-clang-arm64"
+	  }
+	],
+	"version": 4
+  }
