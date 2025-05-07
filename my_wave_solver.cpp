@@ -1,10 +1,16 @@
 #include "mfem.hpp"
+#include <filesystem>  // C++17
+#include <fstream>
+#include <string>
+#include <iomanip>  // at the top of your file if not already included
+
+namespace fs = std::filesystem;
 using namespace mfem;
 using namespace std;
 
-#include <iomanip>  // at the top of your file if not already included
 
-void saveData(const int, const Vector&, const GridFunction &);
+
+void saveData(std::string, const int, const Vector&, const GridFunction &);
 int main()
 {
    int N = 20;
@@ -108,8 +114,11 @@ int main()
       u_old = u;
       u = u_new;
    
+
+	  std::string folder = "results/test2";
+     fs::create_directories(folder); 
 	  if ((cycle % 10) == 0)  {
-		saveData(cycle, u, nodes2);
+		saveData(folder, cycle, u, nodes2);
 	  }
 	cout<<"cycle\t:"<<cycle<<endl;
 	cycle++;
@@ -129,12 +138,12 @@ int main()
    return 0;
 }
 
-void saveData(const int cycle, const Vector& u, const GridFunction &nodes2){
+void saveData(std::string folder, const int cycle, const Vector& u, const GridFunction &nodes2){
 	
 	std::ostringstream oss;
 oss << std::setw(5) << 						std::setfill('0') << cycle;
 	std::string padded = oss.str();  
-	std::ofstream u_out("results/u_data_t" + padded + ".dat");
+	std::ofstream u_out(folder+"/u_data_t" + padded + ".dat");
 		
 		  for (int i = 0; i < u.Size(); i++)
 		  {
