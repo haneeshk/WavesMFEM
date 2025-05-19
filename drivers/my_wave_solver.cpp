@@ -11,14 +11,6 @@ namespace fs = std::filesystem;
 using namespace mfem;
 using namespace std;
 
-// double f(double epsilon,double x) {
-//     if (x <= epsilon) {
-//         return 1.0 + (2.0 * x * x * x) / (epsilon * epsilon * epsilon)
-//                    - (3.0 * x * x) / (epsilon * epsilon);
-//     } else {
-//         return 0.0;
-//     }
-// }
 
 namespace standing {
 
@@ -28,7 +20,7 @@ namespace standing {
 
 namespace quess {  
 	double l =1.0; //length of the string
-	double n= 5;	
+	double n= 4;	
 	 double c =1.0; //wave speed.
 	 double lambda=(4*l)/(2*n+1);
 	 double gamma=(2*M_PI)/lambda;
@@ -99,28 +91,66 @@ u_old.Add(-0.5 * dt * dt, a0);  // ✅ correct sign
 }
 
 
+// struct ElementAndIntegrationPoint
+// {
+//     int element;
+//     mfem::IntegrationPoint ip;
 
-double EvaluateAtX0(mfem::GridFunction &u, double x_val=0.0)
-{
-    mfem::Mesh &mesh = *u.FESpace()->GetMesh();
-    const int NE = mesh.GetNE();
+//     ElementAndIntegrationPoint() = default;
 
-    mfem::Vector x(1);
-    x(0) = x_val;
+//     ElementAndIntegrationPoint(int elem, const mfem::IntegrationPoint &pt)
+//         : element(elem), ip(pt) {}
+// };
 
-    for (int i = 0; i < NE; i++)
-    {
-        mfem::ElementTransformation *T = mesh.GetElementTransformation(i);
-        mfem::IntegrationPoint ip;
 
-        if (T->TransformBack(x, ip))
-        {
-            return u.GetValue(i,ip);  // ✅ Correct: returns double
-        }
-    }
 
-    throw std::runtime_error("x = 0.0 not found in any element");
-}
+// ElementAndIntegrationPoint ComputeElementAndIntegrationPoint(mfem::GridFunction &u, double x_val=0.0){
+// 	mfem::Mesh &mesh = *u.FESpace()->GetMesh();
+//     const int NE = mesh.GetNE();
+
+//     mfem::Vector x(1);
+//     x(0) = x_val;
+
+//     for (int i = 0; i < NE; i++)
+//     {
+//         mfem::ElementTransformation *T = mesh.GetElementTransformation(i);
+//         mfem::IntegrationPoint ip;
+
+//         if (T->TransformBack(x, ip))
+//         {
+//             return ElementAndIntegrationPoint(i,ip);  // ✅ Correct: returns double
+//         }
+//     }
+
+//     throw std::runtime_error("x = 0.0 not found in any element");
+// }
+
+// double EvaluateAtX0(mfem::GridFunction &u, double x_val=0.0)
+// {
+//     mfem::Mesh &mesh = *u.FESpace()->GetMesh();
+//     const int NE = mesh.GetNE();
+
+//     mfem::Vector x(1);
+//     x(0) = x_val;
+
+//     for (int i = 0; i < NE; i++)
+//     {
+//         mfem::ElementTransformation *T = mesh.GetElementTransformation(i);
+//         mfem::IntegrationPoint ip;
+		
+
+//         if (T->TransformBack(x, ip))
+//         {
+//             cout<<"i is \t :"<<i<<","<<endl;
+// 			cout<<"x_val is \t :"<<x_val<<","<<endl;
+// 			cout<<"ip.x is \t :"<<ip.x<<","<<endl;
+// 			cout<<"u.GetValue(i,ip) is \t :"<<u.GetValue(i,ip)<<","<<endl;
+// 			return u.GetValue(i,ip);  // ✅ Correct: returns double
+//         }
+//     }
+
+//     throw std::runtime_error("x = 0.0 not found in any element");
+// }
 
 int main()
 {
@@ -137,6 +167,7 @@ int main()
    mesh2.Print(mesh_ofs2);
 
    const GridFunction &nodes2 = *mesh2.GetNodes();
+ 	
    if (mesh2.GetNodes() == nullptr) { cout << "mesh2.GetNodes() = nullptr\n"; }
 
    cout << "mesh2 order: " << order2 << endl;
@@ -216,7 +247,7 @@ int main()
 
     
 
-   std::string resultsFolder = "results/test8";
+   std::string resultsFolder = "results/test9";
    fs::create_directories(resultsFolder); 
    ParaViewDataCollection pvdc("configFiles", &mesh2);
    pvdc.SetPrefixPath(resultsFolder);      // Directory to save data
@@ -225,6 +256,12 @@ int main()
    pvdc.RegisterField("u", &u);    // Associate field with data collection
    
  
+
+   ofstream pointDisplacement(resultsFolder+"/"+"pointDisplacement.dat");
+   const int selectNode=282;
+   
+
+
  // Time-stepping loop
  int cycle=1;
  
@@ -240,15 +277,13 @@ for (t = dt; t <= t_final; t += dt)
 		using namespace quess;
          return  A* sin( omega*t); // g(t) at left, 0 at right
       });
-    //   u.ProjectBdrCoefficient(g_t, left_bdr);
-    //   u.ProjectBdrCoefficient(zero, right_bdr);
-
+    
       // rhs = -K u
       K.Mult(u, rhs);
       rhs *= -1.0;
 
       
-	  cg.Mult(rhs, a);  // solve M a = rhs
+	  cg.Mult(rhs, a);  // solve M a = rhs 
       // Central difference: u^{n+1} = 2u^n - u^{n-1} + dt^2 * a
       Vector temp(u.Size());
       add(u, u, temp);                 // 2u^n
@@ -262,7 +297,8 @@ for (t = dt; t <= t_final; t += dt)
       u = u_new;
    
 
-	  double u_leftEnd = EvaluateAtX0(u,t);
+	//   ElementAndIntegrationPoint ixi= ComputeElementAndIntegrationPoint(u,0.0); 
+	  double u_leftEnd = u(10);
 	  double expected = quess::A * sin(quess::omega * t);
   
 	  std::cout << "u(0, t) = " << u_leftEnd << ", expected = " << expected
@@ -272,6 +308,7 @@ for (t = dt; t <= t_final; t += dt)
 
 	  if ((cycle % 50) == 0)  {
 		saveData(resultsFolder, cycle, u, nodes2);
+		pointDisplacement << std::fixed << std::setprecision(10) << t << "\t" << u(selectNode) << "\n";
 		pvdc.SetCycle(cycle);   // Record time step number
         pvdc.SetTime(t);       // Record simulation time
         pvdc.Save();   
@@ -281,7 +318,9 @@ for (t = dt; t <= t_final; t += dt)
 	
 	}
 
-   // Output result
+	pointDisplacement.close();
+	
+	// Output result
    ofstream u_data(resultsFolder+"/"+"SimulationDetails.txt");
    u_data<<"saved output to "+resultsFolder<<endl;
    u_data<<"The  time period T is \t"<<T<<endl;
@@ -325,3 +364,12 @@ for (t = dt; t <= t_final; t += dt)
 // 		return (x[0]<0.75)? 0.0 : 1;
 		
 // 	});
+
+
+
+// {double x_0_val; 
+	
+// 	x_0_val=nodes2(0);  // get coordinate of DOF 0
+// 	x_0_val=nodes2(79);  // get coordinate of DOF 0
+// 	 std::cout << "DOF 0 coordinate: " << x_0_val << std::endl;}
+ 
