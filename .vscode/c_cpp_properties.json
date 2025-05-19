@@ -3,7 +3,7 @@
 	  {
 		"name": "Mac",
 		"includePath": [
-		  "${workspaceFolder}",
+		  "${workspaceFolder}/include",
 		  "${workspaceFolder}/../mfem",
 		  "${workspaceFolder}/../mfem/fem",
 		  "${workspaceFolder}/../mfem/linalg",
@@ -12,7 +12,7 @@
 		],
 		"defines": [],
 		"macFrameworkPath": [],
-		"compilerPath": "/usr/bin/clang++",
+		"compilerPath": "/usr/bin/clang++",  // or g++ if you prefer
 		"cStandard": "c17",
 		"cppStandard": "c++17",
 		"intelliSenseMode": "macos-clang-arm64"

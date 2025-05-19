@@ -1,19 +1,8 @@
 {
 	"version": "0.2.0",
 	"configurations": [
-		
 	  {
-		"name": "Run my_wave_solver (CMake build)",
-		"type": "lldb",
-		"request": "launch",
-		"program": "${workspaceFolder}/build/my_wave_solver",
-		"args": [],
-		"cwd": "${workspaceFolder}"
-	  },
-
-
-	  {
-		"name": "Run my_wave_solver (no debug)",
+		"name": "Run my_wave_solver",
 		"type": "cppdbg",
 		"request": "launch",
 		"program": "${workspaceFolder}/build/my_wave_solver",
@@ -22,9 +11,8 @@
 		"cwd": "${workspaceFolder}",
 		"environment": [],
 		"externalConsole": false,
-		"MIMode": "lldb",
-		"preLaunchTask": "Build with CMake"
+		"MIMode": "lldb",  // or "gdb" on Linux
+		"preLaunchTask": "Build my_wave_solver"
 	  }
-
 	]
   }
