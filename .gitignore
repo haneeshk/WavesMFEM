@@ -1,7 +1,7 @@
 # Ignore .dat files
 *.dat
 *.vtu
-*.ptvu
+*.pvtu
 
 # Optional: Ignore build artifacts
 /build/
