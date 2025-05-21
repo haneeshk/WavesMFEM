@@ -30,6 +30,20 @@
 		},
 		"problemMatcher": ["$gcc"]
 	  },
+	  {
+		"label": "Clear Test Results Folder",
+		"type": "shell",
+		"command": "./scripts/clear_results.sh",
+		"problemMatcher": [],
+		"group": "build"
+	  },
+	  {
+		"label": "Plot Point Displacement",
+		"type": "shell",
+		"command": "./scripts/run_plot.sh",
+		"problemMatcher": [],
+		"group": "build"
+	  },
 
 	  {
 		"label": "Run my_wave_solver",

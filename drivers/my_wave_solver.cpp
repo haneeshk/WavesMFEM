@@ -1,6 +1,7 @@
 #include "mfem.hpp"
 #include <filesystem>  // C++17
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <iomanip>  // at the top of your file if not already included
 #include <cmath>    // Include cmath for pow function
@@ -18,13 +19,80 @@ namespace standing {
 
 }
 
+
+#include <map>
+#include <cmath>
+#include <string>
+
+#include <iostream>
+#include <string>
+#include <map>
+#include <initializer_list>
+#include <stdexcept>
+#include <cmath>
+
+class Quess {
+public:
+    // Constructor with key-value initializer list
+    Quess(std::initializer_list<std::pair<std::string, double>> init) {
+        // Set default base values
+        values["l"] = 1.0;
+        values["n"] = 4.0;
+        values["c"] = 1.0;
+        values["A"] = 0.2;
+        values["epsilon"] = 0.1;
+
+        // Override with user input
+        for (const auto &p : init) {
+            if (values.count(p.first) == 0)
+                throw std::invalid_argument("Invalid parameter: " + p.first);
+            values[p.first] = p.second;
+        }
+
+        // Derived quantities
+        values["lambda"] = (4 * values["l"]) / (2 * values["n"] + 1);
+        values["gamma"]  = (2.0 * M_PI) / values["lambda"];
+        values["omega"]  = values["gamma"] * values["c"];
+    }
+
+    // Read-only dictionary-style access
+    double operator[](const std::string &key) const {
+        auto it = values.find(key);
+        if (it == values.end())
+            throw std::out_of_range("Invalid key: " + key);
+        return it->second;
+    }
+
+    // Piecewise cubic shape function on [0, epsilon]
+    double f(double x) const {
+        double eps = values.at("epsilon");
+        if (x <= eps) {
+            return 1.0 + (2.0 * x * x * x) / (eps * eps * eps)
+                   - (3.0 * x * x) / (eps * eps);
+        }
+        return 0.0;
+    }
+
+    // Smooth mollifier supported on [-epsilon, epsilon]
+    double mollifier(double x) const {
+        double eps = values.at("epsilon");
+        if (std::abs(x) >= eps) return 0.0;
+        double r = x / eps;
+        return std::exp(-1.0 / (1.0 - r * r)) * std::exp(1.0);
+    }
+
+private:
+    std::map<std::string, double> values;
+};
+
+
 namespace quess {  
 	double l =1.0; //length of the string
 	double n= 4;	
 	 double c =1.0; //wave speed.
 	 double lambda=(4*l)/(2*n+1);
 	 double gamma=(2*M_PI)/lambda;
-	 double A = 0.1; // Amplitude of the loading
+	 double A = 0.2; // Amplitude of the loading
 	 double omega= gamma*c;
 	 double epsilon=0.1;
  
@@ -247,7 +315,7 @@ int main()
 
     
 
-   std::string resultsFolder = "results/test9";
+   std::string resultsFolder = "results/test10";
    fs::create_directories(resultsFolder); 
    ParaViewDataCollection pvdc("configFiles", &mesh2);
    pvdc.SetPrefixPath(resultsFolder);      // Directory to save data
