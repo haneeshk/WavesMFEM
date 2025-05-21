@@ -39,7 +39,7 @@ public:
         values["l"] = 1.0;
         values["n"] = 4.0;
         values["c"] = 1.0;
-        values["A"] = 0.2;
+        values["A"] = 0.15;
         values["epsilon"] = 0.1;
 
         // Override with user input
@@ -88,11 +88,11 @@ private:
 
 namespace quess {  
 	double l =1.0; //length of the string
-	double n= 4;	
+	double n= 3;	
 	 double c =1.0; //wave speed.
 	 double lambda=(4*l)/(2*n+1);
 	 double gamma=(2*M_PI)/lambda;
-	 double A = 0.2; // Amplitude of the loading
+	 double A = 0.1; // Amplitude of the loading
 	 double omega= gamma*c;
 	 double epsilon=0.1;
  

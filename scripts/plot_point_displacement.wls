@@ -1,7 +1,6 @@
 #!/usr/bin/env wolframscript
 (* ::Package:: *)
 
-
 (*ClearAll[l,n,c,\[Lambda],\[Gamma],\[Omega],\[Epsilon]]
 ClearAll[y,pde,ics,bcs]
 ClearAll[f]
@@ -1308,6 +1307,7 @@ mfemfig = ListPlot[data, AxesLabel -> {"t", "u"},
    Text[
      Style[
        Grid[{{
+         Row[{"A = ", NumberForm[mma`A, {3, 2}],","}],
          Row[{"l = ", NumberForm[mma`l, {3, 2}],","}],
          Row[{"n = ", NumberForm[mma`n, {3, 2}],","}],
          Row[{"c = ", NumberForm[mma`c, {3, 2}],","}] 
