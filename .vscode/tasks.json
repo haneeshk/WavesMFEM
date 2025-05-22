@@ -8,7 +8,9 @@
 		"args": [
 		  "-std=c++17",
 		  "drivers/my_wave_solver.cpp",
-		  "src/save.cpp",             // ← Add more .cpp files here as needed
+		  "src/save.cpp",             // ← Add more .cpp files 
+		  // here as needed
+		  "src/quess.cpp",
 		  "../mfem/libmfem.a",        // link against MFEM static library
 		  "-Iinclude",                // your own headers
 		  "-I../mfem",                // MFEM base
@@ -16,6 +18,7 @@
 		  "-I../mfem/linalg",
 		  "-I../mfem/general",
 		  "-I../mfem/mesh",
+		  "-I/opt/homebrew/Cellar/nlohmann-json/3.12.0/include",
 		  "-ldl",                     // MFEM dependencies
 		  "-lpthread",
 		  "-o",
@@ -45,6 +48,20 @@
 		"group": "build"
 	  },
 
+	  {
+		"label": "Run my_wave_solver with input.json",
+		"type": "shell",
+		"command": "./build/my_wave_solver",
+		"args": ["scripts/SimulationParameters.json"],
+		// "options": {
+		//   "shell": {
+		// 	"executable": "/opt/homebrew/bin/zsh"
+		//   },
+		//   "cwd": "${workspaceFolder}"
+		// },
+		"dependsOn": ["Build my_wave_solver"],
+		"problemMatcher": []
+	  },
 	  {
 		"label": "Run my_wave_solver",
 		"type": "shell",

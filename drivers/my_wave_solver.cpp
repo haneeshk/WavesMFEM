@@ -1,16 +1,23 @@
 #include "mfem.hpp"
 #include <filesystem>  // C++17
+#include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <iomanip>  // at the top of your file if not already included
 #include <cmath>    // Include cmath for pow function
+#include <map>
+#include <initializer_list>
+#include <stdexcept>
+
 
 #include "save.hpp"
+#include "quess.hpp"
 
 namespace fs = std::filesystem;
 using namespace mfem;
 using namespace std;
+using json = nlohmann::json;
 
 
 namespace standing {
@@ -20,75 +27,26 @@ namespace standing {
 }
 
 
-#include <map>
-#include <cmath>
-#include <string>
 
-#include <iostream>
-#include <string>
-#include <map>
-#include <initializer_list>
-#include <stdexcept>
-#include <cmath>
 
-class Quess {
-public:
-    // Constructor with key-value initializer list
-    Quess(std::initializer_list<std::pair<std::string, double>> init) {
-        // Set default base values
-        values["l"] = 1.0;
-        values["n"] = 4.0;
-        values["c"] = 1.0;
-        values["A"] = 0.15;
-        values["epsilon"] = 0.1;
 
-        // Override with user input
-        for (const auto &p : init) {
-            if (values.count(p.first) == 0)
-                throw std::invalid_argument("Invalid parameter: " + p.first);
-            values[p.first] = p.second;
-        }
 
-        // Derived quantities
-        values["lambda"] = (4 * values["l"]) / (2 * values["n"] + 1);
-        values["gamma"]  = (2.0 * M_PI) / values["lambda"];
-        values["omega"]  = values["gamma"] * values["c"];
+
+
+
+
+
+void save_fx_data(const Quess& q, const std::string& filename) {
+    std::ofstream file(filename);
+    int N = 1000;
+    for (int i = 0; i <= N; ++i) {
+        double x = i / double(N);
+        file << x << " " << q.f(x) << "\n";
     }
-
-    // Read-only dictionary-style access
-    double operator[](const std::string &key) const {
-        auto it = values.find(key);
-        if (it == values.end())
-            throw std::out_of_range("Invalid key: " + key);
-        return it->second;
-    }
-
-    // Piecewise cubic shape function on [0, epsilon]
-    double f(double x) const {
-        double eps = values.at("epsilon");
-        if (x <= eps) {
-            return 1.0 + (2.0 * x * x * x) / (eps * eps * eps)
-                   - (3.0 * x * x) / (eps * eps);
-        }
-        return 0.0;
-    }
-
-    // Smooth mollifier supported on [-epsilon, epsilon]
-    double mollifier(double x) const {
-        double eps = values.at("epsilon");
-        if (std::abs(x) >= eps) return 0.0;
-        double r = x / eps;
-        return std::exp(-1.0 / (1.0 - r * r)) * std::exp(1.0);
-    }
-
-private:
-    std::map<std::string, double> values;
-};
-
-
+}
 namespace quess {  
 	double l =1.0; //length of the string
-	double n= 3;	
+	double n= 4;	
 	 double c =1.0; //wave speed.
 	 double lambda=(4*l)/(2*n+1);
 	 double gamma=(2*M_PI)/lambda;
@@ -159,71 +117,68 @@ u_old.Add(-0.5 * dt * dt, a0);  // ✅ correct sign
 }
 
 
-// struct ElementAndIntegrationPoint
-// {
-//     int element;
-//     mfem::IntegrationPoint ip;
-
-//     ElementAndIntegrationPoint() = default;
-
-//     ElementAndIntegrationPoint(int elem, const mfem::IntegrationPoint &pt)
-//         : element(elem), ip(pt) {}
-// };
 
 
 
-// ElementAndIntegrationPoint ComputeElementAndIntegrationPoint(mfem::GridFunction &u, double x_val=0.0){
-// 	mfem::Mesh &mesh = *u.FESpace()->GetMesh();
-//     const int NE = mesh.GetNE();
 
-//     mfem::Vector x(1);
-//     x(0) = x_val;
-
-//     for (int i = 0; i < NE; i++)
-//     {
-//         mfem::ElementTransformation *T = mesh.GetElementTransformation(i);
-//         mfem::IntegrationPoint ip;
-
-//         if (T->TransformBack(x, ip))
-//         {
-//             return ElementAndIntegrationPoint(i,ip);  // ✅ Correct: returns double
-//         }
-//     }
-
-//     throw std::runtime_error("x = 0.0 not found in any element");
-// }
-
-// double EvaluateAtX0(mfem::GridFunction &u, double x_val=0.0)
-// {
-//     mfem::Mesh &mesh = *u.FESpace()->GetMesh();
-//     const int NE = mesh.GetNE();
-
-//     mfem::Vector x(1);
-//     x(0) = x_val;
-
-//     for (int i = 0; i < NE; i++)
-//     {
-//         mfem::ElementTransformation *T = mesh.GetElementTransformation(i);
-//         mfem::IntegrationPoint ip;
-		
-
-//         if (T->TransformBack(x, ip))
-//         {
-//             cout<<"i is \t :"<<i<<","<<endl;
-// 			cout<<"x_val is \t :"<<x_val<<","<<endl;
-// 			cout<<"ip.x is \t :"<<ip.x<<","<<endl;
-// 			cout<<"u.GetValue(i,ip) is \t :"<<u.GetValue(i,ip)<<","<<endl;
-// 			return u.GetValue(i,ip);  // ✅ Correct: returns double
-//         }
-//     }
-
-//     throw std::runtime_error("x = 0.0 not found in any element");
-// }
-
-int main()
+int main(int argc, char* argv[])
 {
    int N = 100;
    int order2 = 3;
+
+   std::string json_path = (argc > 1) ? argv[1] : "input.json";
+        
+Quess q({
+	{"l",1.0}, //length of the string
+	{"n",4},
+	{"c",1.0}, //wave speed.
+	{"A",0.1}, // Amplitude of the loading
+	{"epsilon",0.1}
+});
+
+q.print();
+
+
+
+	//  double lambda=(4*l)/(2*n+1);
+	//  double gamma=(2*M_PI)/lambda;
+	//  double omega= gamma*c;
+	
+
+        // Access computed or default parameters
+        // std::cout << "l = " << q["l"] << "\n";
+		// std::cout << "A = " << q["A"] << "\n";
+        // std::cout << "lambda = " << q["lambda"] << "\n";
+        // std::cout << "omega = " << q["omega"] << "\n";
+
+        // Use f(x)
+        // double x1 = 0.1;
+        // std::cout << "f(" << x1 << ") = " << q.f(x1) << "\n";
+
+        // Use mollifier(x)
+        // double x2 = 0.05;
+        // std::cout << "mollifier(" << x2 << ") = " << q.mollifier(x2) << "\n";
+
+
+    
+	// save_fx_data(q, "f_data.dat");
+   std::ifstream infile(json_path);
+   if (!infile.is_open()) {
+	   std::cerr << "Error: Could not open " << json_path << std::endl;
+	   return 1;
+   }
+
+   json config;
+   infile >> config;
+
+   // Extract parameters
+   string testName = config["testName"];
+   
+   cout << "testName = " << testName<<endl;
+
+
+
+
    Mesh mesh2 = Mesh::MakeCartesian1D(N, 1.0);
    mesh2.SetCurvature(order2, false); // Enable high-order geometry
 
@@ -303,8 +258,8 @@ int main()
    SparseMatrix K(k.SpMat());
 
    // Time integration setup
-   double T=2*M_PI/quess::omega;
-   double t = 0.0, t_final = 5*(2*quess::l/quess::c), dt = T/10000;
+   double T=2*M_PI/q["omega"];
+   double t = 0.0, t_final = 5*(2*q["l"]/q["c"]), dt = T/10000;
    GridFunction u_old(&fespace2);
    InitializeOldSolution(u, v, M, K, dt, u_old);
  
@@ -315,7 +270,7 @@ int main()
 
     
 
-   std::string resultsFolder = "results/test10";
+   std::string resultsFolder = "results/"+testName;
    fs::create_directories(resultsFolder); 
    ParaViewDataCollection pvdc("configFiles", &mesh2);
    pvdc.SetPrefixPath(resultsFolder);      // Directory to save data
@@ -341,9 +296,9 @@ for (t = dt; t <= t_final; t += dt)
 	
 	
 	// Apply Dirichlet BCs
-      FunctionCoefficient g_t([t](const Vector &x) {
+      FunctionCoefficient g_t([t,q](const Vector &x) {
 		using namespace quess;
-         return  A* sin( omega*t); // g(t) at left, 0 at right
+         return  q["A"]* sin(q["omega"]*t); // g(t) at left, 0 at right
       });
     
       // rhs = -K u
