@@ -1,4 +1,8 @@
-{
+{ "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "editor.formatOnSave": true,
+	"editor.lineHeight": 20,
+},
 	"terminal.integrated.defaultProfile.osx": "zsh",
 	"terminal.integrated.profiles.osx": {
 	  "zsh": {

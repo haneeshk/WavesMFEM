@@ -77,6 +77,55 @@
 		"label": "Build and Run my_wave_solver",
 		"dependsOn": ["Build my_wave_solver", "Run my_wave_solver"],
 		"dependsOrder": "sequence"
-	  }
+	  },
+
+	  {
+      "label": "Build mesh_info_driver",
+      "type": "shell",
+      "command": "g++",
+      "args": [
+        "-std=c++17",
+		"drivers/mesh_info_driver.cpp",
+		  "src/save.cpp",             // ← Add more .cpp files 
+		  // here as needed
+		  "src/quess.cpp",
+		  "../mfem/libmfem.a",        // link against MFEM static library
+		  "-Iinclude",                // your own headers
+		  "-I../mfem",                // MFEM base
+		  "-I../mfem/fem",
+		  "-I../mfem/linalg",
+		  "-I../mfem/general",
+		  "-I../mfem/mesh",
+		  "-I/opt/homebrew/Cellar/nlohmann-json/3.12.0/include",
+		  "-ldl",                     // MFEM dependencies
+		  
+		  "-lpthread",
+		  "-o", "build/mesh_info_driver",
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [],
+      "detail": "Compile mesh_info_driver using MFEM in ../MFEM"
+    },
+    {
+      "label": "Run mesh_info_driver",
+      "type": "shell",
+      "command": "./build/mesh_info_driver",
+      "args": [
+        // "-m", "input/meshes/my_mesh2.mesh"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Build mesh_info_driver"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "detail": "Run mesh_info_driver with input/star.mesh"
+    }
 	]
   }

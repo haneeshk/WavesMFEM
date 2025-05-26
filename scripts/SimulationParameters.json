@@ -1,3 +1,27 @@
 {
-	"testName": "test11"
-  }
+	"testName": "test11",
+	
+	
+"Simulation Parameters": {
+	"Total Simulation Time": 4.0,
+	"Time Step Factor" : 5000,
+	"Mesh Parameters": {
+		"Mesh Size N": 100
+	}
+},
+
+	"Initial Conditions": {
+		"epsilon": 0.1
+	},
+   
+	"Boundary Conditions" : {
+      "n" : 4.0,
+	  "A" : 0.1
+	},
+
+	"Physical Parameters": {
+		"Bar Length": 1.0,
+		"Bar Wave Speed": 1.0
+	}
+}
+	
