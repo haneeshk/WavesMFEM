@@ -198,8 +198,20 @@ Vector CoordinatesOfDoF(Mesh &mesh, const int i, std::string PreName = "X", std:
 int main(int argc, char *argv[])
 {
 
-	// Mesh mesh();
-	Mesh *mesh = new Mesh("../mfem/data/star.mesh", 1, 1);
+	// Mesh *mesh = new Mesh("../mfem/data/star.mesh", 1, 1);
+
+	int nx = 10, ny = 10;
+
+	Mesh *mesh = new Mesh(
+		Mesh::MakeCartesian2D(
+			nx, ny,
+			Element::QUADRILATERAL, // element type
+			true,					// generate_nodes
+			1.0, 1.0				// domain size in x and y
+			));
+
+	mesh->PrintInfo();
+
 	int dim = mesh->Dimension();
 	int order = 1;
 	FiniteElementCollection *fec;
@@ -213,32 +225,43 @@ int main(int argc, char *argv[])
 	//  FiniteElementSpace vfespace(&mesh, &fec, dim); // vector field of dim components
 	//  mesh.SetCurvature(order, false);
 
-	GridFunction displacement(fespace);
-	displacement = 0.0; // Initialize to zero
-
-	VectorFunctionCoefficient ripple(dim, [](const Vector &x, Vector &v)
-									 {
-										 // double r = sqrt(x[0]*x[0] + x[1]*x[1]);
-										 // double amp = 0.2 * sin(4 * M_PI * r);
-										 v[0] = 0.2 * x[1]; // amp * x[0];
-										 v[1] = 0.0 * x[0]; // amp * x[1]; });
-									 });
-
-	displacement.ProjectCoefficient(ripple); // Project coefficient onto FE space
-
 	mesh->SetNodalFESpace(fespace);
+	// mesh_fespaceinfo(*mesh, *fespace, *fespace);
+
 	GridFunction *nodes = mesh->GetNodes();
+
 	socketstream glvis("localhost", 19916);
 	glvis << "mesh\n"
 		  << *mesh << flush;
+	ParaViewDataCollection pvdc("deformed_output", mesh);
+	pvdc.SetPrefixPath("results");
+	pvdc.SetLevelsOfDetail(order);
+	pvdc.SetHighOrderOutput(true);
 
-	// mesh_fespaceinfo(*mesh, *fespace, *fespace);
+	// Step 2: Save original mesh at time = 0
+	pvdc.SetTime(0.0);
+	pvdc.SetCycle(0);
 
-	const int SelectDOF = 10;
-	CoordinatesOfDoF(*mesh, SelectDOF, "X", "Vec");
-	*nodes += displacement; // 6. Deform the mesh: mesh nodes += displacement
-	CoordinatesOfDoF(displacement, SelectDOF, "Displacement", "Vec");
-	CoordinatesOfDoF(*mesh, SelectDOF, "x", "Vec");
+	GridFunction displacement(fespace);
+	displacement = 0.0;								   // Initialize to zero
+	pvdc.RegisterField("displacement", &displacement); // Even if displacement is 0
+	pvdc.Save();
+
+	// VectorFunctionCoefficient ripple(dim, [](const Vector &x, Vector &v)
+	// 								 {
+	// 									 // double r = sqrt(x[0]*x[0] + x[1]*x[1]);
+	// 									 // double amp = 0.2 * sin(4 * M_PI * r);
+	// 									 v[0] = 0.5 * x[1]; // amp * x[0];
+	// 									 v[1] = 0.0 * x[0]; // amp * x[1]; });
+	// 								 });
+
+	// displacement.ProjectCoefficient(ripple); // Project coefficient onto FE space
+
+	// const int SelectDOF = 10;
+	// CoordinatesOfDoF(*mesh, SelectDOF, "X", "Vec");
+	// *nodes += displacement; // 6. Deform the mesh: mesh nodes += displacement
+	// CoordinatesOfDoF(displacement, SelectDOF, "Displacement", "Vec");
+	// CoordinatesOfDoF(*mesh, SelectDOF, "x", "Vec");
 
 	// PrintVectorFormatted(displacement, 1, 8, 0, 1);
 
@@ -248,30 +271,27 @@ int main(int argc, char *argv[])
 	cout << "vdim" << vdim << endl;
 	cout << "ndofs" << ndofs << endl;
 
+	// // 3. Save to VTK using ParaViewDataCollection
+	// Step 1: Initialize ParaView data collection
+
+	double t = 1.0;
+	pvdc.SetTime(t);
+	pvdc.SetCycle(1); // or any step index you like
+
+	Vector x(2); // assuming 2D
+
+	for (int i = 0; i < ndofs; i++)
+	{
+		x[0] = (*nodes)(i);
+		x[1] = (*nodes)(i + ndofs);
+		(*nodes)(i) = x[0] + 0.2 * x[1];
+		(*nodes)(i + ndofs) = x[1];
+	}
+
+	pvdc.Save();
 	socketstream glvis2("localhost", 19916);
 	glvis2 << "mesh\n"
 		   << *mesh << flush;
-
-	// // 3. Save to VTK using ParaViewDataCollection
-	// ParaViewDataCollection pvdc("deformed_output", mesh);
-	// pvdc.SetPrefixPath("results"); // saves to results/deformed_output/
-	// pvdc.SetLevelsOfDetail(order); // enable curved mesh visualization
-	// pvdc.SetHighOrderOutput(true); // keeps high-order curved geometry
-	// pvdc.SetCycle(0);
-	// pvdc.SetTime(0.0);
-	// pvdc.RegisterField("displacement", &displacement);
-	// pvdc.Save();
-	for (int i = 0; i < ndofs; i++)
-	{
-		std::cout << "DOF " << i << ": (";
-		for (int d = 0; d < vdim; d++)
-		{
-			std::cout << (*nodes)(i + d * ndofs);
-			if (d < vdim - 1)
-				std::cout << ", ";
-		}
-		std::cout << ")" << std::endl;
-	}
 
 	return 0;
 }
