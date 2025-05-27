@@ -27,13 +27,6 @@ void WriteNodeCoordinates(const Mesh &mesh, const std::string &filename)
 		return;
 	}
 
-	// out << "# NodeIndex";
-	// for (int d = 0; d < vdim; d++)
-	// {
-	// 	out << " x" << d;
-	// }
-	// out << "\n";
-
 	for (int i = 0; i < ndofs; ++i)
 	{
 		out << i;
@@ -97,34 +90,32 @@ void mesh_fespaceinfo(const Mesh &mesh, const FiniteElementSpace &fespace, const
 	std::cout << "Press Enter to continue...";
 	std::cin.get();
 
-	{ // 3. Print general information
-		cout << "Mesh Information:\n";
-		cout << "------------------\n";
-		// cout << "Mesh file: " << mesh_file << endl;
-		cout << "Mesh dimension: mesh.Dimension()" << mesh.Dimension() << endl;
-		std::cin.get();
-		cout << "Embedding dimension (space dim): mesh.SpaceDimension() " << mesh.SpaceDimension() << endl;
-		std::cin.get();
-		cout << "Number of elements: mesh.GetNE()" << mesh.GetNE() << endl;
-		std::cin.get();
-		cout << "Number of boundary elements: mesh.GetNBE()" << mesh.GetNBE() << endl;
-		std::cin.get();
-		cout << "Number of vertices: mesh.GetNV() " << mesh.GetNV() << endl;
-		std::cin.get();
-		cout << "Number of edges: mesh.GetNEdges()" << mesh.GetNEdges() << endl;
-		std::cin.get();
-		cout << "Number of faces: mesh.GetNFaces()" << mesh.GetNFaces() << endl;
-
-		// cout << "Number of boundary attributes: ";
-		//  << mesh.GetNumBdrGeometries(mesh.Dimension()-1) << endl;
-	}
+	cout << "Mesh Information:\n";
+	cout << "------------------\n";
+	// cout << "Mesh file: " << mesh_file << endl;
+	cout << "Mesh dimension: mesh.Dimension()" << mesh.Dimension() << endl;
+	std::cin.get();
+	cout << "Embedding dimension (space dim): mesh.SpaceDimension() " << mesh.SpaceDimension() << endl;
+	std::cin.get();
+	cout << "Number of elements: mesh.GetNE()" << mesh.GetNE() << endl;
+	std::cin.get();
+	cout << "Number of boundary elements: mesh.GetNBE()" << mesh.GetNBE() << endl;
+	std::cin.get();
+	cout << "Number of vertices: mesh.GetNV() " << mesh.GetNV() << endl;
+	std::cin.get();
+	cout << "Number of edges: mesh.GetNEdges()" << mesh.GetNEdges() << endl;
+	std::cin.get();
+	cout << "Number of faces: mesh.GetNFaces()" << mesh.GetNFaces() << endl;
 
 	cout << "fespace.GetNDofs()\t" << fespace.GetNDofs() << endl;
-	cout << "vfespace.GetNDofs()\t" << vfespace.GetNDofs() << endl;
 	cout << "fespace.GetVDim()\t" << fespace.GetVDim() << endl;
 	cout << "fespace.GetTrueVSize()\t" << fespace.GetTrueVSize() << endl;
+	cout << endl;
+	cout << "vfespace.GetNDofs()\t" << vfespace.GetNDofs() << endl;
 	cout << "vfespace.GetVDim()\t" << vfespace.GetVDim() << endl;
 	cout << "vfespace.GetTrueVSize()\t" << vfespace.GetTrueVSize() << endl;
+	cout << endl;
+	cout << endl;
 	cout << "nodes->Size()\t" << nodes->Size() << endl;
 	cout << "nodes->VectorDim()\t" << nodes->VectorDim() << endl;
 	// cout << "u_scalar.Size()\t" << u_scalar.Size() << endl;
@@ -143,12 +134,12 @@ int main(int argc, char *argv[])
 	int dim = mesh.Dimension();
 	int order = 1;
 	H1_FECollection fec(order, dim);
-	FiniteElementSpace sfespace(&mesh, &fec, 1);  // scalar field of dim
-	FiniteElementSpace fespace(&mesh, &fec, dim); // vector field of dim components
+	FiniteElementSpace fespace(&mesh, &fec, 1);	   // scalar field of dim
+	FiniteElementSpace vfespace(&mesh, &fec, dim); // vector field of dim components
 	mesh.SetCurvature(order, false);
 
 	// 4. Create a vector-valued GridFunction for the displacement
-	GridFunction displacement(&fespace);
+	GridFunction displacement(&vfespace);
 	displacement = 0.0; // Initialize to zero
 
 	// 5. Define a vector coefficient to project (e.g., radial ripple)
@@ -157,7 +148,7 @@ int main(int argc, char *argv[])
 										 // double r = sqrt(x[0]*x[0] + x[1]*x[1]);
 										 // double amp = 0.2 * sin(4 * M_PI * r);
 										 v[0] = 0.2 * x[1]; // amp * x[0];
-										 v[1] = 0.0;		// amp * x[1]; });
+										 v[1] = 0.2 * x[0]; // amp * x[1]; });
 									 });
 
 	displacement.ProjectCoefficient(ripple); // Project coefficient onto FE space
@@ -167,10 +158,11 @@ int main(int argc, char *argv[])
 	glvis << "mesh\n"
 		  << mesh << flush;
 
-	// 6. Deform the mesh: mesh nodes += displacement
 	GridFunction *nodes = mesh.GetNodes();
 
-	int i = 70;						  // DOF index
+	mesh_fespaceinfo(mesh, fespace, vfespace);
+
+	int i = 10;						  // DOF index
 	int vdim = nodes->VectorDim();	  // Embedding dimension (e.g., 2 for x/y)
 	int ndofs = nodes->Size() / vdim; // Number of FE nodes (scalar DOFs)
 	{
@@ -178,9 +170,9 @@ int main(int argc, char *argv[])
 		double x = (*nodes)(i);			// x-coordinate
 		double y = (*nodes)(i + ndofs); // y-coordinate (since coordinates are stored component-wise)
 
-		std::cout << "DOF " << i << " has coordinates: (" << x << ", " << y << ")" << std::endl;
+		std::cout << "DOF " << i << " has coordinates \n: XVec={" << x << ", " << y << "}" << std::endl;
 	}
-	*nodes += displacement;
+	*nodes += displacement; // 6. Deform the mesh: mesh nodes += displacement
 
 	// std::ofstream mesh_out("deformed_star.mesh");
 	// mesh.Print(mesh_out);
@@ -191,14 +183,7 @@ int main(int argc, char *argv[])
 	glvis2 << "mesh\n"
 		   << mesh << flush;
 
-	// mesh_fespaceinfo(mesh, sfespace, fespace);
 	// WriteNodeCoordinates(mesh, "temp/starNodes.dat");
-
-	for (int i = 0; i < displacement.Size(); i++)
-	{
-
-		cout << "dof no. " << i << "disp " << displacement(i) << endl;
-	}
 
 	{
 
@@ -206,7 +191,7 @@ int main(int argc, char *argv[])
 
 		double x_component = displacement(i);		  // index for x-component}
 		double y_component = displacement(i + ndofs); // index for y-component}
-		std::cout << "x component " << x_component << " y component: " << y_component << std::endl;
+		std::cout << "dVec= {" << x_component << "," << y_component << "}" << std::endl;
 	}
 	{
 		int vdim = nodes->VectorDim();	  // Embedding dimension (e.g., 2 for x/y)
@@ -215,7 +200,15 @@ int main(int argc, char *argv[])
 		double x = (*nodes)(i);			// x-coordinate
 		double y = (*nodes)(i + ndofs); // y-coordinate (since coordinates are stored component-wise)
 
-		std::cout << "DOF " << i << " has coordinates: (" << x << ", " << y << ")" << std::endl;
+		std::cout << "DOF " << i << " has coordinates \n: xVec={" << x << ", " << y << "}" << std::endl;
+	}
+
+	cout << "Press key so see displacement of each node....\n";
+	cin.get();
+	for (int i = 0; i < displacement.Size(); i++)
+	{
+
+		cout << "dof no. " << i << "disp " << displacement(i) << endl;
 	}
 
 	return 0;
