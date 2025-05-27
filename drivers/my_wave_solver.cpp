@@ -23,47 +23,6 @@ constexpr double π = M_PI;
 // Standing wave
 // double omega_l= (nl+1./2)*M_PI *(c_o/ell);
 
-void save_fx_data(const Quess &q, const std::string &filename)
-{
-	std::ofstream file(filename);
-	int N = 1000;
-	for (int i = 0; i <= N; ++i)
-	{
-		double x = i / double(N);
-		file << x << " " << q.f(x) << "\n";
-	}
-}
-
-namespace quess
-{
-	double l = 1.0; // length of the string
-	double n = 4;
-	double c = 1.0; // wave speed.
-	double lambda = (4 * l) / (2 * n + 1);
-	double gamma = (2 * M_PI) / lambda;
-	double A = 0.1; // Amplitude of the loading
-	double omega = gamma * c;
-	double epsilon = 0.1;
-
-	auto f = [](double epsilon, double x)
-	{if (x <= epsilon) {
-		 return 1.0 + (2.0 * x * x * x) / (epsilon * epsilon * epsilon)
-					- (3.0 * x * x) / (epsilon * epsilon);
-	 } else {
-		 return 0.0;
-	 } };
-
-	auto mollifier = [](double epsilon, double x) -> double
-	{
-		if (std::abs(x) >= epsilon)
-			return 0.0;
-		double r = x / epsilon;
-		double peak_inv = std::exp(1.0);
-		return std::exp(-1.0 / (1.0 - r * r)) * peak_inv;
-	};
-
-}
-
 FunctionCoefficient initialize_velocity(const json &inputParameters)
 {
 	// Extract required parameters
@@ -180,24 +139,13 @@ int main(int argc, char *argv[])
 
 	json inputParameters;
 	readInputParameters(argc, argv, inputParameters);
-
-	// Extract parameters
-
-	std::cout
-		<< inputParameters.dump(2) << std::endl; // compact, no pretty formatting
-
-	Quess q({{"l", inputParameters["Physical Parameters"]["Bar Length"]}, // length of the string
-			 {"n", inputParameters["Boundary Conditions"]["n"]},
-			 {"c", inputParameters["Physical Parameters"]["Bar Wave Speed"]}, // wave speed.
-			 {"A", inputParameters["Boundary Conditions"]["A"]},			  // Amplitude of the loading
-			 {"epsilon", inputParameters["Initial Conditions"]["epsilon"]}});
-
-	q.print();
+	cout
+		<< inputParameters.dump(2) << std::endl;
 
 	Mesh mesh2 = Mesh::MakeCartesian1D(inputParameters["Simulation Parameters"]["Mesh Parameters"]["Mesh Size N"], 1.0);
 	mesh2.SetCurvature(order2, false); // Enable high-order geometry
 
-	H1_FECollection fec2(order2, 1);
+	H1_FECollection fec2(order2, mesh2.Dimension());
 	FiniteElementSpace fespace2(&mesh2, &fec2);
 
 	// Output mesh for verification
@@ -297,7 +245,6 @@ int main(int argc, char *argv[])
 
 	for (double t = dt; t <= t_final; t += dt)
 	{
-		// Apply Dirichlet BCs
 
 		// rhs = -K u
 		K.Mult(u, rhs);
@@ -310,6 +257,7 @@ int main(int argc, char *argv[])
 		add(temp, -1.0, u_old, temp); // 2u^n - u^{n-1}
 		add(temp, dt * dt, a, u_new); // u^{n+1}
 
+		// Apply Dirichlet BCs
 		FunctionCoefficient g_t = g_t_generator(t);
 		u_new.ProjectBdrCoefficient(g_t, left_bdr);
 		u_new.ProjectBdrCoefficient(zero, right_bdr);

@@ -6,6 +6,24 @@
 using namespace mfem;
 using namespace std;
 
+std::vector<double> linspace(double a, double b, int n)
+{
+	std::vector<double> result;
+	if (n <= 0)
+		return result;
+	if (n == 1)
+	{
+		result.push_back(a);
+		return result;
+	}
+
+	double step = (b - a) / (n - 1);
+	for (int i = 0; i < n; ++i)
+		result.push_back(a + i * step);
+
+	return result;
+}
+
 void WriteNodeCoordinates(const Mesh &mesh, const std::string &filename)
 {
 	const GridFunction *nodes = mesh.GetNodes();
@@ -89,11 +107,20 @@ bool plot_fx_data(Mesh &mesh, const GridFunction &u, string datafile = "temp/dat
 	return 0;
 }
 
-void mesh_fespaceinfo(const Mesh &mesh, const FiniteElementSpace &fespace, const FiniteElementSpace &vfespace)
+int main(int argc, char *argv[])
 {
-	const GridFunction *nodes = mesh.GetNodes();
-	// GridFunction u_scalar(&fespace);
-	// GridFunction u_vector(&vfespace);
+	// 1. Parse command-line options
+
+	int order = 3;
+	Mesh mesh = Mesh::MakeCartesian1D(10, 1.0);
+	Mesh mesh = Mesh::MakeCartesian1D(10, 1.0);
+	mesh.SetCurvature(order, false); // Enable high-order geometry
+
+	// Vector min, max;
+	// mesh.GetBoundingBox(min, max);
+	// cout
+	// 	<< "x_min = " << min(0) << endl;
+	// cout << "x_max = " << max(0) << endl;
 	std::cout << "Press Enter to continue...";
 	std::cin.get();
 
@@ -119,104 +146,79 @@ void mesh_fespaceinfo(const Mesh &mesh, const FiniteElementSpace &fespace, const
 		//  << mesh.GetNumBdrGeometries(mesh.Dimension()-1) << endl;
 	}
 
+	H1_FECollection fec(order, mesh.Dimension());
+	FiniteElementSpace fespace(&mesh, &fec);
+	FiniteElementSpace vfespace(&mesh, &fec, 2);
+	GridFunction u_scalar(&fespace);
+	GridFunction u_vector(&vfespace);
+	const GridFunction *nodes = mesh.GetNodes();
+
 	cout << "fespace.GetNDofs()\t" << fespace.GetNDofs() << endl;
 	cout << "vfespace.GetNDofs()\t" << vfespace.GetNDofs() << endl;
 	cout << "fespace.GetVDim()\t" << fespace.GetVDim() << endl;
 	cout << "fespace.GetTrueVSize()\t" << fespace.GetTrueVSize() << endl;
 	cout << "vfespace.GetVDim()\t" << vfespace.GetVDim() << endl;
 	cout << "vfespace.GetTrueVSize()\t" << vfespace.GetTrueVSize() << endl;
-	cout << "nodes->Size()\t" << nodes->Size() << endl;
+	cout << "nodes->GetNDofs()\t" << nodes->Size() << endl;
 	cout << "nodes->VectorDim()\t" << nodes->VectorDim() << endl;
-	// cout << "u_scalar.Size()\t" << u_scalar.Size() << endl;
-	// cout << "u_vector.Size()\t" << u_vector.Size() << endl;
+	cout << "u_scalar.Size()\t" << u_scalar.Size() << endl;
+	cout << "u_vector.Size()\t" << u_vector.Size() << endl;
 
-	std::cout << "Press Enter to continue...";
 	std::cin.get();
 
-	return;
-}
+	GridFunction u(&fespace);
+	FunctionCoefficient coeff([](const Vector &x)
+							  { return sin(2 * M_PI * x(0)); });
+	u.ProjectCoefficient(coeff);
 
-int main(int argc, char *argv[])
-{
-
-	Mesh mesh("../mfem/data/star.mesh");
-	int dim = mesh.Dimension();
-	int order = 1;
-	H1_FECollection fec(order, dim);
-	FiniteElementSpace sfespace(&mesh, &fec, 1);  // scalar field of dim
-	FiniteElementSpace fespace(&mesh, &fec, dim); // vector field of dim components
-	mesh.SetCurvature(order, false);
-
-	// 4. Create a vector-valued GridFunction for the displacement
-	GridFunction displacement(&fespace);
-	displacement = 0.0; // Initialize to zero
-
-	// 5. Define a vector coefficient to project (e.g., radial ripple)
-	VectorFunctionCoefficient ripple(dim, [](const Vector &x, Vector &v)
-									 {
-										 // double r = sqrt(x[0]*x[0] + x[1]*x[1]);
-										 // double amp = 0.2 * sin(4 * M_PI * r);
-										 v[0] = 0.2 * x[1]; // amp * x[0];
-										 v[1] = 0.0;		// amp * x[1]; });
-									 });
-
-	displacement.ProjectCoefficient(ripple); // Project coefficient onto FE space
-
-	// 8. (Optional) Visualize in GLVis
-	socketstream glvis("localhost", 19916);
-	glvis << "mesh\n"
-		  << mesh << flush;
-
-	// 6. Deform the mesh: mesh nodes += displacement
-	GridFunction *nodes = mesh.GetNodes();
-
-	int i = 70;						  // DOF index
-	int vdim = nodes->VectorDim();	  // Embedding dimension (e.g., 2 for x/y)
-	int ndofs = nodes->Size() / vdim; // Number of FE nodes (scalar DOFs)
+	for (int n = 0; n < fespace.GetNDofs(); n++)
 	{
-
-		double x = (*nodes)(i);			// x-coordinate
-		double y = (*nodes)(i + ndofs); // y-coordinate (since coordinates are stored component-wise)
-
-		std::cout << "DOF " << i << " has coordinates: (" << x << ", " << y << ")" << std::endl;
-	}
-	*nodes += displacement;
-
-	// std::ofstream mesh_out("deformed_star.mesh");
-	// mesh.Print(mesh_out);
-	// mesh_out.close();
-
-	// 8. (Optional) Visualize in GLVis
-	socketstream glvis2("localhost", 19916);
-	glvis2 << "mesh\n"
-		   << mesh << flush;
-
-	// mesh_fespaceinfo(mesh, sfespace, fespace);
-	// WriteNodeCoordinates(mesh, "temp/starNodes.dat");
-
-	for (int i = 0; i < displacement.Size(); i++)
-	{
-
-		cout << "dof no. " << i << "disp " << displacement(i) << endl;
+		GridFunction phi_n(&fespace);
+		phi_n = 0.0;
+		phi_n(n) = 0.1;
+		plot_fx_data(mesh, phi_n, "temp/phi" + std::to_string(n) + ".dat");
 	}
 
+	// 4. Print element types
+	cout << "\nElement Types:\n";
+	for (int i = 0; i < mesh.GetNE(); i++)
 	{
-
-		int vdim = displacement.FESpace()->GetVDim(); // should be 2
-
-		double x_component = displacement(i);		  // index for x-component}
-		double y_component = displacement(i + ndofs); // index for y-component}
-		std::cout << "x component " << x_component << " y component: " << y_component << std::endl;
+		Geometry::Type geom = mesh.GetElementBaseGeometry(i);
+		cout << "  Element " << i << ": " << Geometry::Name[geom] << endl;
 	}
+
+	if (nodes && nodes->Size() > 0)
 	{
-		int vdim = nodes->VectorDim();	  // Embedding dimension (e.g., 2 for x/y)
-		int ndofs = nodes->Size() / vdim; // Number of FE nodes (scalar DOFs)
-
-		double x = (*nodes)(i);			// x-coordinate
-		double y = (*nodes)(i + ndofs); // y-coordinate (since coordinates are stored component-wise)
-
-		std::cout << "DOF " << i << " has coordinates: (" << x << ", " << y << ")" << std::endl;
+		cout << "nodes->Size()\t" << nodes->Size() << endl;
+		int vdim = nodes->VectorDim(); // = space dimension
+		cout << "nodes->VectorDim()\t" << vdim << endl;
+		cout << "fespace.GetNDofs()\t" << fespace.GetNDofs() << endl;
+		for (int i = 0; i < fespace.GetNDofs(); i++)
+		{
+			std::cout << "DOF " << i << ": (";
+			for (int d = 0; d < vdim; d++)
+			{
+				std::cout << (*nodes)(i + d * fespace.GetNDofs());
+				if (d < vdim - 1)
+					std::cout << ", ";
+			}
+			std::cout << ")" << std::endl;
+		}
 	}
+	else
+	{
+		std::cout << "Mesh is not curved. No node coordinates are stored." << std::endl;
+	}
+
+	WriteNodeCoordinates(mesh, "temp/nodes.dat");
 
 	return 0;
 }
+
+// // 5. Print boundary element types
+// 	cout << "\nBoundary Element Types:\n";
+// 	for (int i = 0; i < mesh.GetNBE(); i++)
+// 	{
+// 		Geometry::Type geom = mesh.GetBdrElementBaseGeometry(i);
+// 		cout << "  Bdr Element " << i << ": " << Geometry::Name[geom] << endl;
+// 	}

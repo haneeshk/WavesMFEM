@@ -3,7 +3,7 @@
 	
 	
 "Simulation Parameters": {
-	"Total Simulation Time": 4.0,
+	"Total Simulation Time": 6.0,
 	"Time Step Factor" : 5000,
 	"Mesh Parameters": {
 		"Mesh Size N": 100
