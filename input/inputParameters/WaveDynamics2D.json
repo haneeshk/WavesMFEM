@@ -1,0 +1,34 @@
+{
+	"testName": "WaveDynamics2D",
+	
+	
+	"Simulation Parameters": {
+		"Total Simulation Time": 3.0,
+		"Time Steps" : 30000,
+		"Mesh Parameters": {
+			"Mesh Height": 5.0,
+			"Mesh Length": 5.0,
+			"NX": 5,
+			"NY": 5
+		}
+	},
+
+	"Initial Conditions": {
+		"epsilon": 0.1
+	},
+   
+	"Boundary Conditions" : {
+	  "A" : 0.02,
+	  "T" : 1000,
+	  "t0" : 0.2
+	},
+
+	"Physical Parameters": {
+		"Density": 100,
+		"Length": 4,
+		"omega": 2,
+		"lambda": 150,
+		"mu": 50
+	}
+}
+	

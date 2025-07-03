@@ -1,6 +1,47 @@
 {
 	"version": "2.0.0",
 	"tasks": [
+		{
+            "label": "Build WaveDynamics2D",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+		"-std=c++17",
+		  "drivers/WaveDynamics2D.cpp",
+		  "src/save.cpp",             // ← Add more .cpp files 
+		  // here as needed
+		  "src/quess.cpp",
+		  "../mfem/libmfem.a",        // link against MFEM static library
+		  "-Iinclude",                // your own headers
+		  "-I../mfem",                // MFEM base
+		  "-I../mfem/fem",
+		  "-I../mfem/linalg",
+		  "-I../mfem/general",
+		  "-I../mfem/mesh",
+		  "-I/opt/homebrew/Cellar/nlohmann-json/3.12.0/include",
+		  "-ldl",                     // MFEM dependencies
+		  "-lpthread",
+		  "-o",
+		  "build/WaveDynamics2D"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Run WaveDynamics2D",
+            "type": "shell",
+            "command": "./build/WaveDynamics2D",
+            "dependsOn": "Build WaveDynamics2D",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
 	  {
 		"label": "Build my_wave_solver",
 		"type": "shell",
@@ -85,7 +126,7 @@
       "command": "g++",
       "args": [
         "-std=c++17",
-		,
+		"-g",
 		"drivers/mesh_info_driver.cpp",
 		  "src/save.cpp",             // ← Add more .cpp files 
 		  // here as needed
@@ -127,6 +168,7 @@
       },
       "problemMatcher": [],
       "detail": "Run mesh_info_driver with input/star.mesh"
-    }
+    },
+	
 	]
   }

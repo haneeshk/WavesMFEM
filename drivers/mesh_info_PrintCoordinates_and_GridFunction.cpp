@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
 
 	mesh_fespaceinfo(mesh, fespace, vfespace);
 
-	const int SelectDOF = 10;
+	rf int SelectDOF = 10;
 	CoordinatesOfDoF(mesh, SelectDOF, "X", "Vec");
 	*nodes += displacement; // 6. Deform the mesh: mesh nodes += displacement
 	CoordinatesOfDoF(displacement, SelectDOF, "Displacement", "Vec");
