@@ -34,23 +34,13 @@ int main(int argc, char *argv[])
 {
 	//   Parse command-line options.
 	const char *mesh_file = "./input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
-	int order = 2;
+	int order = 3;
 	bool static_cond = false;
 	bool visualization = 0;
 	int ref_levels = 2;
 
 	json inputParameters;
 	readInputParameters(argc, argv, inputParameters);
-
-	OptionsParser args(argc, argv);
-	args.AddOption(&order, "-o", "--order",
-				   "Finite element order (polynomial degree).");
-	args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
-				   "--no-visualization",
-				   "Enable or disable GLVis visualization.");
-	args.AddOption(&ref_levels, "-r", "--ref_levels",
-				   "Number of uniform mesh refinements.");
-	args.Parse();
 
 	// Read the mesh from the given mesh file.
 	Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -164,10 +154,15 @@ int main(int argc, char *argv[])
 	k.Finalize();
 	SparseMatrix K(k.SpMat());
 
-	// Make sure all of the below parameters (or the ones that are necessary) are included in JSON file.
 	const double t_final = inputParameters["Simulation Parameters"]["Total Simulation Time"];
-	const double TimeSteps = inputParameters["Simulation Parameters"]["Time Steps"];
-	const double dt = t_final / TimeSteps;
+	// const double TimeSteps = inputParameters["Simulation Parameters"]["Time Steps"];
+	const double dt = inputParameters["Simulation Parameters"]["Simulation Time Step"];
+	const double TimeSteps = t_final / dt;
+	const double dt_save = inputParameters["Simulation Parameters"]["Data Storage Time Interval"];
+	std::cout << "dt_save / dt" << dt_save / dt << std::endl;
+	const int n_save = dt_save / dt;
+	std::cout << "n_save\t:" << n_save << std::endl;
+	// const double dt = t_final / TimeSteps;
 
 	GridFunction u_old(fespace);
 	// InitializeOldSolution(u, v, M, K, dt, u_old); // comment if non-zero tractions are prescribed.
@@ -268,8 +263,9 @@ int main(int argc, char *argv[])
 		u_old = u;
 		u = u_new;
 
-		if ((cycle % 50) == 0)
+		if ((cycle % n_save) == 0)
 		{
+			std::cout << "saving data" << std::endl;
 			pointDisplacement << std::fixed << std::setprecision(10) << t << "\t" << u(selectNode) << "\n";
 			pvdc.SetCycle(cycle); // Record time step number
 			pvdc.SetTime(t);	  // Record simulation time
@@ -284,8 +280,22 @@ int main(int argc, char *argv[])
 	ofstream u_data(resultsFolder + "/" + "SimulationDetails.txt");
 	u_data << "saved output to " + resultsFolder << endl;
 	u_data << "The  time period T is \t" << inputParameters["Physical Parameters"]["Time Period"] << endl;
-	u_data << "The  simulation time is t_final is \t" << t_final << endl;
-	u_data.close();
+	{
+		// double L=inputParameters["Physical Parameters"]["Time Period"]
+		double h = mesh->GetElementSize(1, /*type=*/1);
+		double c_p = std::sqrt((lambda + 2 * mu) / rho);
+		double c_s = std::sqrt(mu / rho);
+		double CFL_dt = h / c_p;
+		u_data
+			<< "t_final\t" << t_final << endl;
+		u_data << "dt\t" << dt << endl;
+		u_data << "c_p\t" << c_p << endl;
+		u_data << "c_s\t" << c_s << endl;
+		u_data << "CFL time\t" << CFL_dt << endl;
+		u_data << "Time Steps \t" << TimeSteps << endl;
+		u_data << "Data storage time interval \t" << dt_save << endl;
+		u_data.close();
+	}
 
 	//   Free the used memory.
 	cout << "Done " << endl;
