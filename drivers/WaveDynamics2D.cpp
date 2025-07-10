@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 {
 	//   Parse command-line options.
 	const char *mesh_file = "../input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
-	int order = 2;
+	int order = 3;
 	bool static_cond = false;
 	bool visualization = 0;
 	int ref_levels = 3;
