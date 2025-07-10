@@ -1,4 +1,4 @@
-//                        Dynamics of helically orthotropic cylinder
+//                        Dynamics of a 2D surface.
 //                        Central difference scheme will be used
 
 #include "mfem.hpp"
@@ -12,9 +12,9 @@
 #include <map>
 #include <initializer_list>
 #include <stdexcept>
-
 #include "save.hpp"
 #include "quess.hpp"
+#include "mfemplus.hpp"
 
 namespace fs = std::filesystem;
 using namespace mfem;
@@ -33,11 +33,11 @@ double tractionamp(const json &inputParameters, const double &t);
 int main(int argc, char *argv[])
 {
 	//   Parse command-line options.
-	const char *mesh_file = "./input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
+	const char *mesh_file = "../input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
 	int order = 2;
 	bool static_cond = false;
 	bool visualization = 0;
-	int ref_levels = 2;
+	int ref_levels = 3;
 
 	json inputParameters;
 	readInputParameters(argc, argv, inputParameters);
@@ -64,16 +64,31 @@ int main(int argc, char *argv[])
 	for (int l = 0; l < ref_levels; l++)
 		mesh->UniformRefinement();
 
-	// Define a finite element space on the mesh.
+	//------------------------------------------------------------------------------------------------------------------
+	// Define finite element spaces.
+	// Define a H1 finite element space for nodal displacements.
 	FiniteElementCollection *fec;
 	FiniteElementSpace *fespace, *fespacebc;
 
 	fec = new H1_FECollection(order, dim);
 	fespace = new FiniteElementSpace(mesh, fec, dim);
+
+	// Define a finite element space to project bcs in the loop.
 	fespacebc = new FiniteElementSpace(mesh, fec);
 
 	cout << "Number of finite element unknowns: " << fespace->GetTrueVSize() << endl;
 
+	// Define an L2 finite element space for element strain and stress.
+	// Dimension of the L2 finite element space is the number of strain and stress components.
+	// For 2D, we have 3 components.
+	FiniteElementCollection *l2fec;
+	FiniteElementSpace *l2fespace;
+
+	l2fec = new L2_FECollection(0, dim);
+	l2fespace = new FiniteElementSpace(mesh, l2fec, 3);
+	//------------------------------------------------------------------------------------------------------------------
+
+	//------------------------------------------------------------------------------------------------------------------
 	//    Determine the list of essential boundary dofs for each vector dimension.
 
 	Array<int> ess_tdof_listx, ess_tdof_listy,
@@ -100,8 +115,10 @@ int main(int argc, char *argv[])
 
 	// Define vectors for each displacement to apply BCs in the loop.
 	Vector dispbcx(mesh->bdr_attributes.Size()), dispbcy(mesh->bdr_attributes.Size());
+	//------------------------------------------------------------------------------------------------------------------
 
-	//    Initialize displacement, velocity, and acceleration grid functions.
+	//------------------------------------------------------------------------------------------------------------------
+	// Create and initialize displacement, velocity, and acceleration grid functions.
 	GridFunction u(fespace), v(fespace), a(fespace);
 
 	// Initial conditions
@@ -111,14 +128,19 @@ int main(int argc, char *argv[])
 	FunctionCoefficient v0_coeff([](const Vector &x)
 								 { return 0.0; });
 	// initialize_velocity(inputParameters);
-
 	u.ProjectCoefficient(u0_coeff);
 	v.ProjectCoefficient(v0_coeff);
+	//------------------------------------------------------------------------------------------------------------------
 
+	//------------------------------------------------------------------------------------------------------------------
+	// Read simulation parameters.
 	const float lambda = inputParameters["Physical Parameters"]["lambda"];
 	const float mu = inputParameters["Physical Parameters"]["mu"];
-
 	ConstantCoefficient lambda_coeff(lambda), mu_coeff(mu);
+
+	const float youngmod = inputParameters["Physical Parameters"]["youngmod"];
+	const float poissonratio = inputParameters["Physical Parameters"]["poissonratio"];
+	ConstantCoefficient E_coeff(youngmod), NU_coeff(poissonratio);
 
 	const float rho = inputParameters["Physical Parameters"]["Density"];
 	ConstantCoefficient density(rho);
@@ -159,7 +181,8 @@ int main(int argc, char *argv[])
 	cg.SetPrintLevel(0);
 
 	BilinearForm k(fespace);
-	k.AddDomainIntegrator(new ElasticityIntegrator(lambda_coeff, mu_coeff));
+	k.AddDomainIntegrator(new mfemplus::IsotropicElasticityIntegrator(E_coeff, NU_coeff));
+	// k.AddDomainIntegrator(new ElasticityIntegrator(lambda_coeff, mu_coeff));
 	k.Assemble();
 	k.Finalize();
 	SparseMatrix K(k.SpMat());
@@ -177,26 +200,47 @@ int main(int argc, char *argv[])
 	Vector rhs(fespace->GetVSize()); // Full-sized RHS
 	ConstantCoefficient zero(0.0);
 
-	std::string resultsFolder = "results/" + inputParameters["testName"].get<std::string>();
+	// Initialize GlobalStressStrain object. Initialize stress and strain grid functions.
+	mfemplus::GlobalStressStrain WaveDynamics(mesh, fespace);
+	GridFunction eps(l2fespace), sig(l2fespace);
+	eps = sig = 0.0;
+
+	GridFunction eps_temp, sig_temp;
+	WaveDynamics.GlobalStrain(u_new, eps_temp);
+	WaveDynamics.GlobalStress(eps_temp, E_coeff, NU_coeff, sig_temp);
+
+	eps = eps_temp;
+	sig = sig_temp;
+	// Inititialize Paraview object
+
+	std::string resultsFolder = "../results/" + inputParameters["testName"].get<std::string>();
 	fs::create_directories(resultsFolder);
 	ParaViewDataCollection pvdc("Waves2D", mesh);
 
-	pvdc.SetPrefixPath(resultsFolder); // Directory to save data
-	pvdc.SetLevelsOfDetail(order);	   // Optional: for visualization
-	pvdc.SetHighOrderOutput(true);	   // Keep high-order info
-	pvdc.RegisterField("u", &u);	   // Associate field with data collection
+	pvdc.SetPrefixPath(resultsFolder);	// Directory to save data
+	pvdc.SetLevelsOfDetail(order);		// Optional: for visualization
+	pvdc.SetHighOrderOutput(true);		// Keep high-order info
+	pvdc.RegisterField("u", &u);		// Associate displacement field with data collection
+	pvdc.RegisterField("strain", &eps); // Associate strain field with data collection
+	pvdc.RegisterField("stress", &sig); // Associate stress field with data collection
 
 	ofstream pointDisplacement(resultsFolder + "/" + "pointDisplacement.dat");
 	const int selectNode = 2;
 
-	// Time-stepping loop
-	int cycle = 1;
+	int cycle = 0;
+	int t = 0;
+	pvdc.SetCycle(cycle); // Record time step number
+	pvdc.SetTime(t);	  // Record simulation time
+	pvdc.Save();
 
+	cycle += 1;
+
+	// Time-stepping loop
 	cout << "Time stepping loop beginning" << endl;
 
 	for (double t = dt; t <= t_final; t += dt)
 	{
-		std::cout << t << std::endl;
+		// std::cout << t << std::endl;
 
 		// Specify and assemble traction on rhs.
 		tr = 0.0;
@@ -253,7 +297,7 @@ int main(int argc, char *argv[])
 		ux.ProjectBdrCoefficient(dircx, ess_bdr_x);
 		uy.ProjectBdrCoefficient(dircy, ess_bdr_y);
 
-		// for loops to replace vector grid function degrees of freedom with presribed Dirichlet values
+		// For loops to replace vector grid function degrees of freedom with presribed Dirichlet values
 		for (int i = 0; i < ess_tdof_listbcx.Size(); i++)
 		{
 			int vdof = fespace->DofToVDof(ess_tdof_listbcx[i], 0);
@@ -268,6 +312,14 @@ int main(int argc, char *argv[])
 		u_old = u;
 		u = u_new;
 
+		// Compute strain and stress
+		GridFunction eps_temp, sig_temp;
+		WaveDynamics.GlobalStrain(u_new, eps_temp);
+		WaveDynamics.GlobalStress(eps_temp, E_coeff, NU_coeff, sig_temp);
+
+		eps = eps_temp;
+		sig = sig_temp;
+
 		if ((cycle % 50) == 0)
 		{
 			pointDisplacement << std::fixed << std::setprecision(10) << t << "\t" << u(selectNode) << "\n";
@@ -279,6 +331,8 @@ int main(int argc, char *argv[])
 		cycle++;
 	}
 
+	cout << "Loop completed." << endl;
+
 	pointDisplacement.close();
 
 	ofstream u_data(resultsFolder + "/" + "SimulationDetails.txt");
@@ -288,7 +342,7 @@ int main(int argc, char *argv[])
 	u_data.close();
 
 	//   Free the used memory.
-	cout << "Done " << endl;
+	cout << "Output saved. " << endl;
 
 	delete fespace;
 	delete fespacebc;
@@ -388,7 +442,7 @@ double tractionamp(const json &inputParameters, const double &t)
 bool readInputParameters(int argc, char *argv[], json &inputParameters)
 {
 	//  (argc > 1) ? argv[1] :
-	std::string json_path = "./input/InputParameters/WaveDynamics2D.json"; // Change JSON file path accordingly.
+	std::string json_path = "../input/InputParameters/WaveDynamics2D.json"; // Change JSON file path accordingly.
 
 	std::ifstream infile(json_path);
 	if (!infile.is_open())

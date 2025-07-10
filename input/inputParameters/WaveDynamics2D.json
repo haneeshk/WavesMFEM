@@ -1,10 +1,10 @@
 {
-	"testName": "WaveDynamics2D",
+	"testName": "Waves2D_3",
 	
 	
 	"Simulation Parameters": {
 		"Total Simulation Time": 3.0,
-		"Time Steps" : 30000,
+		"Time Steps" : 3000,
 		"Mesh Parameters": {
 			"Mesh Height": 5.0,
 			"Mesh Length": 5.0,
@@ -19,7 +19,7 @@
    
 	"Boundary Conditions" : {
 	  "A" : 0.02,
-	  "T" : 1000,
+	  "T" : 10,
 	  "t0" : 0.2
 	},
 
@@ -28,7 +28,9 @@
 		"Length": 4,
 		"omega": 2,
 		"lambda": 150,
-		"mu": 50
+		"mu": 50,
+		"youngmod": 100,
+		"poissonratio": 0.35
 	}
 }
 	
