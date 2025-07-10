@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
 
 	l2fec = new L2_FECollection(0, dim);
 	l2fespace = new FiniteElementSpace(mesh, l2fec, 3);
+	int num_els = l2fespace->GetNDofs();
 	//------------------------------------------------------------------------------------------------------------------
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -211,6 +212,7 @@ int main(int argc, char *argv[])
 
 	eps = eps_temp;
 	sig = sig_temp;
+
 	// Inititialize Paraview object
 
 	std::string resultsFolder = "../results/" + inputParameters["testName"].get<std::string>();
@@ -319,6 +321,12 @@ int main(int argc, char *argv[])
 
 		eps = eps_temp;
 		sig = sig_temp;
+
+		// Convert engineering shear strain to true shear strain.
+		for (int i = (2 * num_els) - 1; i < eps.Size(); i++)
+		{
+			eps(i) = eps_temp(i) / 2;
+		}
 
 		if ((cycle % 50) == 0)
 		{
