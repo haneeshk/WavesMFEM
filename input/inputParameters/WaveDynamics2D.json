@@ -1,5 +1,5 @@
 {
-	"testName": "WaveDynamics2D",
+	"testName": "Waves2D_1",
 	
 	
 	"Simulation Parameters": {
@@ -21,7 +21,7 @@
    
 	"Boundary Conditions" : {
 	  "A" : 0.02,
-	  "T" : 1000,
+	  "T" : 10,
 	  "t0" : 0.2
 	},
 
@@ -30,7 +30,9 @@
 		"Length": 4,
 		"omega": 2,
 		"lambda": 150,
-		"mu": 50
+		"mu": 50,
+		"youngmod": 100,
+		"poissonratio": 0.35
 	}
 }
 	
