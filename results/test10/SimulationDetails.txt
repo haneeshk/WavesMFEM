@@ -1,0 +1,3 @@
+saved output to results/test10
+The  time period T is 	0.444444
+The  simulation time is t_final is 	5

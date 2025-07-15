@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	int order = 3;
 	bool static_cond = false;
 	bool visualization = 0;
-	int ref_levels = 3;
+	int ref_levels = 4;
 
 	json inputParameters;
 	readInputParameters(argc, argv, inputParameters);
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 
 	// Inititialize Paraview object
 
-	std::string resultsFolder = "../results/" + inputParameters["testName"].get<std::string>();
+	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
 	fs::create_directories(resultsFolder);
 	ParaViewDataCollection pvdc("Waves2D", mesh);
 
@@ -325,12 +325,12 @@ int main(int argc, char *argv[])
 
 		if ((cycle % n_save) == 0)
 		{
-			std::cout << "saving data" << std::endl;
+			// std::cout << "saving data" << std::endl;
 			pointDisplacement << std::fixed << std::setprecision(10) << t << "\t" << u(selectNode) << "\n";
 			pvdc.SetCycle(cycle); // Record time step number
 			pvdc.SetTime(t);	  // Record simulation time
 			pvdc.Save();
-			// cout << "cycle\t:" << cycle << "/" << TimeSteps << endl;
+			cout << "cycle\t:" << cycle << "/" << TimeSteps << endl;
 		}
 		cycle++;
 	}
@@ -459,8 +459,9 @@ double tractionamp(const json &inputParameters, const double &t)
 
 bool readInputParameters(int argc, char *argv[], json &inputParameters)
 {
+	std::cout << "Inside the readInputParameters file" << std::endl;
 	//  (argc > 1) ? argv[1] :
-	std::string json_path = "../input/InputParameters/WaveDynamics2D.json"; // Change JSON file path accordingly.
+	std::string json_path = "./input/InputParameters/WaveDynamics2D.json"; // Change JSON file path accordingly.
 
 	std::ifstream infile(json_path);
 	if (!infile.is_open())
