@@ -12,3 +12,4 @@ Makefile
 
 # Optional: Ignore executable
 my_wave_solver
+*.png
