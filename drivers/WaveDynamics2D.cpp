@@ -288,6 +288,8 @@ int main(int argc, char *argv[])
 
 		// PWConstCoefficient for Dirichlet BCs by boundary attribute.
 		PWConstCoefficient dircx(dispbcx), dircy(dispbcy);
+		dircx = 0.0;
+		dircy = 0.0;
 		GridFunction ux(fespacebc), uy(fespacebc);
 		ux = uy = 0.0;
 

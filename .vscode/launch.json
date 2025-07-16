@@ -1,6 +1,26 @@
 {
 	"version": "0.2.0",
 	"configurations": [
+
+		{
+      "name": "Debug MFEM Program",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/WaveDynamics2D",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb", // or "gdb" if you prefer
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb/lldb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
 	  {
 		"name": "Run my_wave_solver",
 		"type": "cppdbg",

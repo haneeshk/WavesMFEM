@@ -3,7 +3,7 @@
 	
 	
 	"Simulation Parameters": {
-		"Total Simulation Time": 6.0,
+		"Total Simulation Time": 1.0,
 		"Data Storage Time Interval": 0.05,
 		 "Simulation Time Step" : 0.001,		 
 		"Mesh Parameters": {
