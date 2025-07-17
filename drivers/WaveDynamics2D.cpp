@@ -23,6 +23,7 @@ using json = nlohmann::json;
 
 constexpr double π = M_PI;
 
+int SaveResults(json &inputParameters, ParaViewDataCollection &pvdc, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ);
 FunctionCoefficient initialize_velocity(const json &inputParameters);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, const Vector &F, double dt, GridFunction &u_old);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, double dt, GridFunction &u_old);
@@ -206,21 +207,11 @@ int main(int argc, char *argv[])
 	WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
 
 	// Inititialize Paraview object
-
-	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
-	fs::create_directories(resultsFolder);
 	ParaViewDataCollection pvdc("Waves2D", mesh);
-
-	pvdc.SetPrefixPath(resultsFolder);	// Directory to save data
-	pvdc.SetLevelsOfDetail(order);		// Optional: for visualization
-	pvdc.SetHighOrderOutput(true);		// Keep high-order info
-	pvdc.RegisterField("u", &u);		// Associate displacement field with data collection
-	pvdc.RegisterField("strain", &eps); // Associate strain field with data collection
-	pvdc.RegisterField("stress", &sig); // Associate stress field with data collection
-
+	SaveResults(inputParameters, pvdc, order, u, eps, sig);
+	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
 	ofstream pointDisplacement(resultsFolder + "/" + "pointDisplacement.dat");
 	const int selectNode = 2;
-
 	int cycle = 0;
 	int t = 0;
 	pvdc.SetCycle(cycle); // Record time step number
@@ -467,5 +458,20 @@ bool readInputParameters(int argc, char *argv[], json &inputParameters)
 	}
 
 	infile >> inputParameters;
+	return 0;
+}
+
+int SaveResults(json &inputParameters, ParaViewDataCollection &pvdc, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ)
+{
+	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
+	fs::create_directories(resultsFolder);
+
+	pvdc.SetPrefixPath(resultsFolder); // Directory to save data
+	pvdc.SetLevelsOfDetail(order);	   // Optional: for visualization
+	pvdc.SetHighOrderOutput(true);	   // Keep high-order info
+	pvdc.RegisterField("u", &u);	   // Associate displacement field with data collection
+	pvdc.RegisterField("strain", &ϵ);  // Associate strain field with data collection
+	pvdc.RegisterField("stress", &σ);  // Associate stress field with data collection
+
 	return 0;
 }
