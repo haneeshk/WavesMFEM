@@ -32,15 +32,28 @@ double tractionamp(const json &inputParameters, const double &t);
 
 int main(int argc, char *argv[])
 {
+	json inputParameters;
+	readInputParameters(argc, argv, inputParameters);
+
+	const float lambda = inputParameters["Physical Parameters"]["lambda"];
+	const float mu = inputParameters["Physical Parameters"]["mu"];
+	ConstantCoefficient lambda_coeff(lambda), mu_coeff(mu);
+
+	const float youngmod = inputParameters["Physical Parameters"]["youngmod"];
+	const float poissonratio = inputParameters["Physical Parameters"]["poissonratio"];
+	ConstantCoefficient E_coeff(youngmod), NU_coeff(poissonratio);
+
+	const float rho = inputParameters["Physical Parameters"]["Density"];
+	ConstantCoefficient density(rho);
+
+	cout << "Physical parameters read" << endl;
+
 	//   Parse command-line options.
 	const char *mesh_file = "./input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
-	int order = 3;
+	int order = 1;
 	bool static_cond = false;
 	bool visualization = 0;
 	int ref_levels = 4;
-
-	json inputParameters;
-	readInputParameters(argc, argv, inputParameters);
 
 	// Read the mesh from the given mesh file.
 	Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -56,27 +69,28 @@ int main(int argc, char *argv[])
 
 	//------------------------------------------------------------------------------------------------------------------
 	// Define finite element spaces.
-	// Define a H1 finite element space for nodal displacements.
+
 	FiniteElementCollection *fec;
 	FiniteElementSpace *fespace, *fespacebc;
 
-	fec = new H1_FECollection(order, dim);
+	fec = new H1_FECollection(order, dim); // Define a H1 finite element space for nodal displacements.
 	fespace = new FiniteElementSpace(mesh, fec, dim);
 
-	// Define a finite element space to project bcs in the loop.
-	fespacebc = new FiniteElementSpace(mesh, fec);
+	fespacebc = new FiniteElementSpace(mesh, fec); // Define a finite element space to project bcs in the loop.
 
 	cout << "Number of finite element unknowns: " << fespace->GetTrueVSize() << endl;
 
 	// Define an L2 finite element space for element strain and stress.
 	// Dimension of the L2 finite element space is the number of strain and stress components.
 	// For 2D, we have 3 components.
+
 	FiniteElementCollection *l2fec;
 	FiniteElementSpace *l2fespace;
 
 	l2fec = new L2_FECollection(0, dim);
 	l2fespace = new FiniteElementSpace(mesh, l2fec, 3);
-	int num_els = l2fespace->GetNDofs();
+	const int num_els = l2fespace->GetNDofs();
+
 	//------------------------------------------------------------------------------------------------------------------
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -125,18 +139,6 @@ int main(int argc, char *argv[])
 
 	//------------------------------------------------------------------------------------------------------------------
 	// Read simulation parameters.
-	const float lambda = inputParameters["Physical Parameters"]["lambda"];
-	const float mu = inputParameters["Physical Parameters"]["mu"];
-	ConstantCoefficient lambda_coeff(lambda), mu_coeff(mu);
-
-	const float youngmod = inputParameters["Physical Parameters"]["youngmod"];
-	const float poissonratio = inputParameters["Physical Parameters"]["poissonratio"];
-	ConstantCoefficient E_coeff(youngmod), NU_coeff(poissonratio);
-
-	const float rho = inputParameters["Physical Parameters"]["Density"];
-	ConstantCoefficient density(rho);
-
-	cout << "Physical parameters read" << endl;
 
 	// Force vector if non-zero tractions are applied.
 	VectorArrayCoefficient traction(dim);
@@ -179,7 +181,6 @@ int main(int argc, char *argv[])
 	SparseMatrix K(k.SpMat());
 
 	const double t_final = inputParameters["Simulation Parameters"]["Total Simulation Time"];
-	// const double TimeSteps = inputParameters["Simulation Parameters"]["Time Steps"];
 	const double dt = inputParameters["Simulation Parameters"]["Simulation Time Step"];
 	const double TimeSteps = t_final / dt;
 	const double dt_save = inputParameters["Simulation Parameters"]["Data Storage Time Interval"];
@@ -201,12 +202,8 @@ int main(int argc, char *argv[])
 	GridFunction eps(l2fespace), sig(l2fespace);
 	eps = sig = 0.0;
 
-	GridFunction eps_temp, sig_temp;
-	WaveDynamics.GlobalStrain(u_new, eps_temp);
-	WaveDynamics.GlobalStress(eps_temp, E_coeff, NU_coeff, sig_temp);
-
-	eps = eps_temp;
-	sig = sig_temp;
+	WaveDynamics.GlobalStrain(u_new, eps);
+	WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
 
 	// Inititialize Paraview object
 
@@ -311,18 +308,15 @@ int main(int argc, char *argv[])
 		u_old = u;
 		u = u_new;
 
-		// Compute strain and stress
-		GridFunction eps_temp, sig_temp;
-		WaveDynamics.GlobalStrain(u_new, eps_temp);
-		WaveDynamics.GlobalStress(eps_temp, E_coeff, NU_coeff, sig_temp);
+		// Compute  strain and stress
 
-		eps = eps_temp;
-		sig = sig_temp;
+		WaveDynamics.GlobalStrain(u_new, eps);
+		WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
 
 		// Convert engineering shear strain to true shear strain.
 		for (int i = (2 * num_els) - 1; i < eps.Size(); i++)
 		{
-			eps(i) = eps_temp(i) / 2;
+			eps(i) = eps(i) / 2;
 		}
 
 		if ((cycle % n_save) == 0)

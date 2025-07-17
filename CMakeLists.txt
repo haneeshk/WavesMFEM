@@ -2,6 +2,8 @@
 # Set cmake minimum version
 
 cmake_minimum_required(VERSION 3.12.0...4.0.0)
+project(mfem_projects)
+
 
 # Set and check compiler
 set(CMAKE_CXX_COMPILER mpic++)
@@ -15,7 +17,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # find_package(MPI REQUIRED)
 
 # Project name
-project(mfem_projects)
+
+set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
 
 # Path to MFEM build
 set(MFEM "${CMAKE_SOURCE_DIR}/../../software/mfem")

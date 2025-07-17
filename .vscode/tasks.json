@@ -1,16 +1,22 @@
 {
 	"version": "2.0.0",
 	"tasks": [
-		{
-      "label": "Build MFEM Program",
-      "type": "shell",
-      "command": "make",
-      "args": [],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
-    },
+{
+  "label": "Build WaveDynamics2D (Debug)",
+  "type": "shell",
+  "command": "make",
+  "args": ["WaveDynamics2D"],
+  "options": {
+    "cwd": "${workspaceFolder}/build"
+  },
+  "group": {
+    "kind": "build",
+    "isDefault": false
+  },
+  "problemMatcher": []
+},
+
+		
 		{
             "label": "Build WaveDynamics2D",
             "type": "shell",
