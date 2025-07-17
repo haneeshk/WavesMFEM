@@ -7,7 +7,7 @@
   "command": "make",
   "args": ["WaveDynamics2D"],
   "options": {
-    "cwd": "${workspaceFolder}/build"
+    "cwd": "${workspaceFolder}/build/debug"
   },
   "group": {
     "kind": "build",
@@ -49,7 +49,7 @@
        {
   "label": "Run WaveDynamics2D",
   "type": "shell",
-  "command": "./build/WaveDynamics2D",
+  "command": "./build/debug/WaveDynamics2D",
   "options": {
     "cwd": "${workspaceFolder}"
   },

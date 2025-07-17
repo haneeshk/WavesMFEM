@@ -1,6 +1,6 @@
 {
 	"testName": "Waves2D_1",
-	
+	"computeStressStrain": false,
 	
 	"Simulation Parameters": {
 		"Total Simulation Time": 1.0,
@@ -12,6 +12,14 @@
 			"NX": 5,
 			"NY": 5
 		}
+	},
+
+"Mesh Parameters": {
+		"meshFileName": "./input/meshes/Rectangle-quad.mesh",
+		"order": 3,
+		"ref_levels":3,
+		"visualization": false,
+		"static_cond" : false
 	},
 
 	"Initial Conditions": {

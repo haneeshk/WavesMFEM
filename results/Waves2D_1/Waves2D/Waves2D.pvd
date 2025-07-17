@@ -11,15 +11,5 @@
 <DataSet timestep="0.35" group="" part="0" file="Cycle000350/data.pvtu" name="mesh"/>
 <DataSet timestep="0.4" group="" part="0" file="Cycle000400/data.pvtu" name="mesh"/>
 <DataSet timestep="0.45" group="" part="0" file="Cycle000450/data.pvtu" name="mesh"/>
-<DataSet timestep="0.5" group="" part="0" file="Cycle000500/data.pvtu" name="mesh"/>
-<DataSet timestep="0.55" group="" part="0" file="Cycle000550/data.pvtu" name="mesh"/>
-<DataSet timestep="0.6" group="" part="0" file="Cycle000600/data.pvtu" name="mesh"/>
-<DataSet timestep="0.65" group="" part="0" file="Cycle000650/data.pvtu" name="mesh"/>
-<DataSet timestep="0.7" group="" part="0" file="Cycle000700/data.pvtu" name="mesh"/>
-<DataSet timestep="0.75" group="" part="0" file="Cycle000750/data.pvtu" name="mesh"/>
-<DataSet timestep="0.8" group="" part="0" file="Cycle000800/data.pvtu" name="mesh"/>
-<DataSet timestep="0.85" group="" part="0" file="Cycle000850/data.pvtu" name="mesh"/>
-<DataSet timestep="0.9" group="" part="0" file="Cycle000900/data.pvtu" name="mesh"/>
-<DataSet timestep="0.95" group="" part="0" file="Cycle000950/data.pvtu" name="mesh"/>
 </Collection>
 </VTKFile>

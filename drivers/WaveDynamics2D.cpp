@@ -23,7 +23,26 @@ using json = nlohmann::json;
 
 constexpr double π = M_PI;
 
-int SaveResults(json &inputParameters, ParaViewDataCollection &pvdc, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ);
+struct matProps
+{
+	double λ;
+	double μ;
+	double ρ;
+	double E;
+	double ν;
+};
+
+struct simProps
+{
+	double t_final; // final t4ime
+	double Δt;		// time step
+	double dt_save;
+	int N; // Number of time steps
+	int n_save;
+};
+
+std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatProps, simProps &brainSimProps, mfem::Mesh *Ω);
+int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ);
 FunctionCoefficient initialize_velocity(const json &inputParameters);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, const Vector &F, double dt, GridFunction &u_old);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, double dt, GridFunction &u_old);
@@ -34,39 +53,32 @@ double tractionamp(const json &inputParameters, const double &t);
 int main(int argc, char *argv[])
 {
 	json inputParameters;
+	matProps brainMatProps;
+	simProps brainSimProps;
 	readInputParameters(argc, argv, inputParameters);
-
-	const float lambda = inputParameters["Physical Parameters"]["lambda"];
-	const float mu = inputParameters["Physical Parameters"]["mu"];
-	ConstantCoefficient lambda_coeff(lambda), mu_coeff(mu);
-
-	const float youngmod = inputParameters["Physical Parameters"]["youngmod"];
-	const float poissonratio = inputParameters["Physical Parameters"]["poissonratio"];
-	ConstantCoefficient E_coeff(youngmod), NU_coeff(poissonratio);
-
-	const float rho = inputParameters["Physical Parameters"]["Density"];
-	ConstantCoefficient density(rho);
-
-	cout << "Physical parameters read" << endl;
-
+	bool computeStressStrain = inputParameters.value("computeStressStrain", true);
 	//   Parse command-line options.
-	const char *mesh_file = "./input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
-	int order = 1;
-	bool static_cond = false;
-	bool visualization = 0;
-	int ref_levels = 4;
+	// const char *mesh_file = "./input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
+	std::string mesh_file_str = inputParameters["Mesh Parameters"]["meshFileName"];
+	const char *mesh_file = mesh_file_str.c_str();
+	int order = inputParameters["Mesh Parameters"]["order"];
+	bool static_cond = inputParameters["Mesh Parameters"]["static_cond"];
+	bool visualization = inputParameters["Mesh Parameters"]["visualization"];
+	int ref_levels = inputParameters["Mesh Parameters"]["ref_levels"];
 
 	// Read the mesh from the given mesh file.
 	Mesh *mesh = new Mesh(mesh_file, 1, 1);
+	int dim = mesh->Dimension();	  // dim should equal 2.
 	mesh->SetCurvature(order, false); // Enable high-order geometry
+	for (int l = 0; l < ref_levels; l++)
+		mesh->UniformRefinement();
 
 	cout << "Mesh created" << endl;
 
-	int dim = mesh->Dimension(); // dim should equal 2.
-	cout << dim << endl;
-
-	for (int l = 0; l < ref_levels; l++)
-		mesh->UniformRefinement();
+	logInWaveDynamics2D(inputParameters, brainMatProps, brainSimProps, mesh);
+	ConstantCoefficient lambda_coeff(brainMatProps.λ), mu_coeff(brainMatProps.μ);
+	ConstantCoefficient E_coeff(brainMatProps.E), NU_coeff(brainMatProps.ν);
+	ConstantCoefficient density(brainMatProps.ρ);
 
 	//------------------------------------------------------------------------------------------------------------------
 	// Define finite element spaces.
@@ -136,10 +148,6 @@ int main(int argc, char *argv[])
 	// initialize_velocity(inputParameters);
 	u.ProjectCoefficient(u0_coeff);
 	v.ProjectCoefficient(v0_coeff);
-	//------------------------------------------------------------------------------------------------------------------
-
-	//------------------------------------------------------------------------------------------------------------------
-	// Read simulation parameters.
 
 	// Force vector if non-zero tractions are applied.
 	VectorArrayCoefficient traction(dim);
@@ -181,18 +189,9 @@ int main(int argc, char *argv[])
 	k.Finalize();
 	SparseMatrix K(k.SpMat());
 
-	const double t_final = inputParameters["Simulation Parameters"]["Total Simulation Time"];
-	const double dt = inputParameters["Simulation Parameters"]["Simulation Time Step"];
-	const double TimeSteps = t_final / dt;
-	const double dt_save = inputParameters["Simulation Parameters"]["Data Storage Time Interval"];
-	std::cout << "dt_save / dt" << dt_save / dt << std::endl;
-	const int n_save = dt_save / dt;
-	std::cout << "n_save\t:" << n_save << std::endl;
-	// const double dt = t_final / TimeSteps;
-
 	GridFunction u_old(fespace);
 	// InitializeOldSolution(u, v, M, K, dt, u_old); // comment if non-zero tractions are prescribed.
-	InitializeOldSolution(u, v, M, K, F, dt, u_old); // un-comment if non-zero tractions are prescribed.
+	InitializeOldSolution(u, v, M, K, F, brainSimProps.Δt, u_old); // un-comment if non-zero tractions are prescribed.
 
 	GridFunction u_new(u);
 	Vector rhs(fespace->GetVSize()); // Full-sized RHS
@@ -201,16 +200,18 @@ int main(int argc, char *argv[])
 	// Initialize GlobalStressStrain object. Initialize stress and strain grid functions.
 	mfemplus::GlobalStressStrain WaveDynamics(mesh, fespace);
 	GridFunction eps(l2fespace), sig(l2fespace);
-	eps = sig = 0.0;
-
-	WaveDynamics.GlobalStrain(u_new, eps);
-	WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
+	if (computeStressStrain)
+	{
+		eps = sig = 0.0;
+		WaveDynamics.GlobalStrain(u_new, eps);
+		WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
+	}
 
 	// Inititialize Paraview object
 	ParaViewDataCollection pvdc("Waves2D", mesh);
-	SaveResults(inputParameters, pvdc, order, u, eps, sig);
-	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
-	ofstream pointDisplacement(resultsFolder + "/" + "pointDisplacement.dat");
+	ofstream pointDisplacement;
+	saveResults(inputParameters, pvdc, pointDisplacement, order, u, eps, sig);
+
 	const int selectNode = 2;
 	int cycle = 0;
 	int t = 0;
@@ -223,7 +224,7 @@ int main(int argc, char *argv[])
 	// Time-stepping loop
 	cout << "Time stepping loop beginning" << endl;
 
-	for (double t = dt; t <= t_final; t += dt)
+	for (double t = brainSimProps.Δt; t <= brainSimProps.t_final; t += brainSimProps.Δt)
 	{
 		// std::cout << t << std::endl;
 
@@ -247,11 +248,11 @@ int main(int argc, char *argv[])
 		add(F, -1.0, rhs, rhs); // un-comment this if prescribing non-zero tractions.
 
 		cg.Mult(rhs, a); // solve M a = rhs
-		// Central difference: u_{n+1} = 2u_n - u_{n-1} + dt^2 * a
+		// Central difference: u_{n+1} = 2u_n - u_{n-1} + brainSimProps.Δt^2 * a
 		Vector temp(u.Size());
-		add(u, u, temp);			  // 2u_n
-		add(temp, -1.0, u_old, temp); // 2u_n - u_{n-1}
-		add(temp, dt * dt, a, u_new); // u_{n+1}
+		add(u, u, temp);										  // 2u_n
+		add(temp, -1.0, u_old, temp);							  // 2u_n - u_{n-1}
+		add(temp, brainSimProps.Δt * brainSimProps.Δt, a, u_new); // u_{n+1}
 
 		// Project Dirichlet BCs back onto GridFunction. Each vector component on a bdr_attribute can have different BC.
 		// A rather convoluted approach is taken here since I could not find a way with MFEM's data structures.
@@ -301,23 +302,26 @@ int main(int argc, char *argv[])
 
 		// Compute  strain and stress
 
-		WaveDynamics.GlobalStrain(u_new, eps);
-		WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
-
-		// Convert engineering shear strain to true shear strain.
-		for (int i = (2 * num_els) - 1; i < eps.Size(); i++)
+		if (computeStressStrain)
 		{
-			eps(i) = eps(i) / 2;
+			WaveDynamics.GlobalStrain(u_new, eps);
+			WaveDynamics.GlobalStress(eps, E_coeff, NU_coeff, sig);
+
+			// Convert engineering shear strain to true shear strain.
+			for (int i = (2 * num_els) - 1; i < eps.Size(); i++)
+			{
+				eps(i) = eps(i) / 2;
+			}
 		}
 
-		if ((cycle % n_save) == 0)
+		if ((cycle % brainSimProps.n_save) == 0)
 		{
 			// std::cout << "saving data" << std::endl;
 			pointDisplacement << std::fixed << std::setprecision(10) << t << "\t" << u(selectNode) << "\n";
 			pvdc.SetCycle(cycle); // Record time step number
 			pvdc.SetTime(t);	  // Record simulation time
 			pvdc.Save();
-			cout << "cycle\t:" << cycle << "/" << TimeSteps << endl;
+			cout << "cycle\t:" << cycle << "/" << brainSimProps.N << endl;
 		}
 		cycle++;
 	}
@@ -325,26 +329,6 @@ int main(int argc, char *argv[])
 	cout << "Loop completed." << endl;
 
 	pointDisplacement.close();
-
-	ofstream u_data(resultsFolder + "/" + "SimulationDetails.txt");
-	u_data << "saved output to " + resultsFolder << endl;
-	u_data << "The  time period T is \t" << inputParameters["Physical Parameters"]["Time Period"] << endl;
-	{
-		// double L=inputParameters["Physical Parameters"]["Time Period"]
-		double h = mesh->GetElementSize(1, /*type=*/1);
-		double c_p = std::sqrt((lambda + 2 * mu) / rho);
-		double c_s = std::sqrt(mu / rho);
-		double CFL_dt = h / c_p;
-		u_data
-			<< "t_final\t" << t_final << endl;
-		u_data << "dt\t" << dt << endl;
-		u_data << "c_p\t" << c_p << endl;
-		u_data << "c_s\t" << c_s << endl;
-		u_data << "CFL time\t" << CFL_dt << endl;
-		u_data << "Time Steps \t" << TimeSteps << endl;
-		u_data << "Data storage time interval \t" << dt_save << endl;
-		u_data.close();
-	}
 
 	//   Free the used memory.
 	cout << "Output saved. " << endl;
@@ -458,20 +442,95 @@ bool readInputParameters(int argc, char *argv[], json &inputParameters)
 	}
 
 	infile >> inputParameters;
+
 	return 0;
 }
 
-int SaveResults(json &inputParameters, ParaViewDataCollection &pvdc, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ)
+int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ)
 {
 	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
-	fs::create_directories(resultsFolder);
+	std::string pointDataFile = resultsFolder + "/" + "pointDisplacement.dat";
+
+	pointDisplacement.open(pointDataFile);
+	if (!pointDisplacement.is_open())
+	{
+		std::cerr << "Failed to open: " << pointDataFile << std::endl;
+		return 1; // or some error code
+	}
 
 	pvdc.SetPrefixPath(resultsFolder); // Directory to save data
 	pvdc.SetLevelsOfDetail(order);	   // Optional: for visualization
 	pvdc.SetHighOrderOutput(true);	   // Keep high-order info
 	pvdc.RegisterField("u", &u);	   // Associate displacement field with data collection
-	pvdc.RegisterField("strain", &ϵ);  // Associate strain field with data collection
-	pvdc.RegisterField("stress", &σ);  // Associate stress field with data collection
+
+	bool computeStressStrain = inputParameters.value("computeStressStrain", true);
+	if (computeStressStrain)
+	{
+		pvdc.RegisterField("strain", &ϵ);
+		pvdc.RegisterField("stress", &σ);
+	}
 
 	return 0;
 }
+
+std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatProps, simProps &brainSimProps, mfem::Mesh *Ω)
+{
+
+	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
+	if (fs::exists(resultsFolder))
+	{
+		std::error_code ec;
+		fs::remove_all(resultsFolder, ec); // remove all contents recursively
+		if (ec)
+		{
+			std::cerr << "Error removing folder: " << ec.message() << std::endl;
+			return ec;
+		}
+	}
+
+	// Recreate a fresh empty directory
+	fs::create_directories(resultsFolder);
+
+	brainMatProps.λ = inputParameters["Physical Parameters"]["lambda"];
+	brainMatProps.μ = inputParameters["Physical Parameters"]["mu"];
+
+	brainMatProps.E = inputParameters["Physical Parameters"]["youngmod"];
+	brainMatProps.ν = inputParameters["Physical Parameters"]["poissonratio"];
+	brainMatProps.ρ = inputParameters["Physical Parameters"]["Density"];
+	cout << "Physical parameters read" << endl;
+
+	brainSimProps.t_final = inputParameters["Simulation Parameters"]["Total Simulation Time"];
+	brainSimProps.Δt = inputParameters["Simulation Parameters"]["Simulation Time Step"];
+	brainSimProps.N = static_cast<int>(std::round(brainSimProps.t_final / brainSimProps.Δt));
+	brainSimProps.dt_save = inputParameters["Simulation Parameters"]["Data Storage Time Interval"];
+	brainSimProps.n_save = static_cast<int>(std::round(brainSimProps.dt_save / brainSimProps.Δt));
+	cout << "Simulation parameters read" << endl;
+
+	// std::cout << "dt_save / dt" << dt_save / dt << std::endl;
+	// std::cout << "n_save\t:" << n_save << std::endl;
+
+	ofstream u_data(resultsFolder + "/" + "SimulationDetails.txt");
+	{
+
+		double λ, μ, ρ;
+		λ = brainMatProps.λ;
+		μ = brainMatProps.μ;
+		ρ = brainMatProps.ρ;
+
+		double h = Ω->GetElementSize(1, /*type=*/1);
+		double c_p = std::sqrt((λ + 2 * μ) / ρ);
+		double c_s = std::sqrt(μ / ρ);
+		double CFL_dt = h / c_p;
+		u_data << "saved output to " + resultsFolder << endl;
+		u_data << "t_final\t" << brainSimProps.t_final << endl;
+		u_data << "dt\t" << brainSimProps.Δt << endl;
+		u_data << "c_p\t" << c_p << endl;
+		u_data << "c_s\t" << c_s << endl;
+		u_data << "CFL time\t" << CFL_dt << endl;
+		u_data << "Time Steps \t" << brainSimProps.N << endl;
+		u_data << "Data storage time interval \t" << brainSimProps.dt_save << endl;
+	}
+
+	u_data.close();
+	return {};
+};

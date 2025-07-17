@@ -18,9 +18,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Project name
 
-set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE) 
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
+# Only set default if not provided
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose Debug or Release" FORCE)
+endif()
 
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native")
 # Path to MFEM build
 set(MFEM "${CMAKE_SOURCE_DIR}/../../software/mfem")
 
