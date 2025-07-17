@@ -46,18 +46,35 @@
             },
             "problemMatcher": ["$gcc"]
         },
-        {
-            "label": "Run WaveDynamics2D",
-            "type": "shell",
-            "command": "./build/WaveDynamics2D",
-            "dependsOn": "Build WaveDynamics2D",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
-            }
-        },
+       {
+  "label": "Run WaveDynamics2D",
+  "type": "shell",
+  "command": "./build/WaveDynamics2D",
+  "options": {
+    "cwd": "${workspaceFolder}"
+  },
+  "presentation": {
+    "echo": true,
+    "reveal": "always",
+    "focus": false,
+    "panel": "shared"
+  },
+  "problemMatcher": []
+}, 
+
+{
+  "label": "Build and Run WaveDynamics2D (Debug)",
+  "type": "shell",
+  "dependsOn": ["Build WaveDynamics2D (Debug)", "Run WaveDynamics2D"],
+  "dependsOrder": "sequence",
+  "group": {
+    "kind": "build",
+    "isDefault": false
+  },
+  "problemMatcher": []
+},
+
+
 	  {
 		"label": "Build my_wave_solver",
 		"type": "shell",

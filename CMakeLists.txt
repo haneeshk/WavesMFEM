@@ -18,7 +18,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Project name
 
-set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE) 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
 
 # Path to MFEM build
