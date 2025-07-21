@@ -1,8 +1,15 @@
 saved output to ./results/Waves2D_1
-t_final	1
+t_final	3
 dt	0.001
 c_p	1.58114
 c_s	0.707107
-CFL time	0.0790569
-Time Steps 	1000
+CFL time	0.158114
+Time Steps 	3000
 Data storage time interval 	0.05
+
+
+Mesh Details
+
+order: 2
+ref_levels: 2
+Number of elements: 400

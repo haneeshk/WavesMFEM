@@ -41,8 +41,73 @@ struct simProps
 	int n_save;
 };
 
+void JacobiEigenvalues(const mfem::DenseMatrix &A, mfem::Vector &eigenvalues, int max_iter = 100, double tol = 1e-12)
+{
+	const int n = A.Height();
+	MFEM_VERIFY(A.Width() == n, "Matrix must be square");
+
+	mfem::DenseMatrix M(A); // make a copy to work on
+	eigenvalues.SetSize(n);
+
+	for (int iter = 0; iter < max_iter; ++iter)
+	{
+		// Find largest off-diagonal element
+		int p = 0, q = 1;
+		double max_val = std::abs(M(0, 1));
+		for (int i = 0; i < n; ++i)
+		{
+			for (int j = i + 1; j < n; ++j)
+			{
+				double val = std::abs(M(i, j));
+				if (val > max_val)
+				{
+					max_val = val;
+					p = i;
+					q = j;
+				}
+			}
+		}
+
+		// Converged?
+		if (max_val < tol)
+			break;
+
+		double θ = 0.5 * std::atan2(2.0 * M(p, q), M(q, q) - M(p, p));
+		double c = std::cos(θ);
+		double s = std::sin(θ);
+
+		// Rotate
+		for (int i = 0; i < n; ++i)
+		{
+			if (i != p && i != q)
+			{
+				double Mip = M(i, p);
+				double Miq = M(i, q);
+				M(i, p) = M(p, i) = c * Mip - s * Miq;
+				M(i, q) = M(q, i) = s * Mip + c * Miq;
+			}
+		}
+
+		double Mpp = M(p, p);
+		double Mqq = M(q, q);
+		double Mpq = M(p, q);
+		M(p, p) = c * c * Mpp - 2 * s * c * Mpq + s * s * Mqq;
+		M(q, q) = s * s * Mpp + 2 * s * c * Mpq + c * c * Mqq;
+		M(p, q) = M(q, p) = 0.0;
+	}
+
+	// Fill in diagonal as eigenvalues
+	for (int i = 0; i < n; ++i)
+		eigenvalues[i] = M(i, i);
+}
+int createNodeGridFunction(mfem::GridFunction &sel_nodes, const mfem::Array<int> &ess_tdof_list);
+
+int determineDirichletDof(const mfem::Mesh &mesh,
+						  const mfem::FiniteElementSpace &fespace,
+						  mfem::Array<int> &ess_tdof_listx,
+						  mfem::Array<int> &ess_tdof_listy);
 std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatProps, simProps &brainSimProps, mfem::Mesh *Ω);
-int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ);
+int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, GridFunction &nodes);
 FunctionCoefficient initialize_velocity(const json &inputParameters);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, const Vector &F, double dt, GridFunction &u_old);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, double dt, GridFunction &u_old);
@@ -73,8 +138,6 @@ int main(int argc, char *argv[])
 	for (int l = 0; l < ref_levels; l++)
 		mesh->UniformRefinement();
 
-	cout << "Mesh created" << endl;
-
 	logInWaveDynamics2D(inputParameters, brainMatProps, brainSimProps, mesh);
 	ConstantCoefficient lambda_coeff(brainMatProps.λ), mu_coeff(brainMatProps.μ);
 	ConstantCoefficient E_coeff(brainMatProps.E), NU_coeff(brainMatProps.ν);
@@ -88,10 +151,19 @@ int main(int argc, char *argv[])
 
 	fec = new H1_FECollection(order, dim); // Define a H1 finite element space for nodal displacements.
 	fespace = new FiniteElementSpace(mesh, fec, dim);
+	mesh->SetNodalFESpace(fespace);
+	cout << "Mesh created" << endl;
 
-	fespacebc = new FiniteElementSpace(mesh, fec); // Define a finite element space to project bcs in the loop.
+	fespacebc = new FiniteElementSpace(mesh, fec, 1); // Define a finite element space to project bcs in the loop.
 
 	cout << "Number of finite element unknowns: " << fespace->GetTrueVSize() << endl;
+	GridFunction *nodes = mesh->GetNodes();
+	MFEM_VERIFY(nodes, "Mesh must be created with generate_nodes = true");
+	const int vdim = nodes->VectorDim(); // Should be 2 for 2D
+	const int ndofs = nodes->FESpace()->GetNDofs();
+	cout << "vdim" << vdim << endl;
+	cout << "node->Size()" << nodes->Size() << endl;
+	cout << "ndofs" << ndofs << endl;
 
 	// Define an L2 finite element space for element strain and stress.
 	// Dimension of the L2 finite element space is the number of strain and stress components.
@@ -109,8 +181,7 @@ int main(int argc, char *argv[])
 	//------------------------------------------------------------------------------------------------------------------
 	//    Determine the list of essential boundary dofs for each vector dimension.
 
-	Array<int> ess_tdof_listx, ess_tdof_listy,
-		ess_bdr_x(mesh->bdr_attributes.Max()), ess_bdr_y(mesh->bdr_attributes.Max());
+	Array<int> ess_bdr_x(mesh->bdr_attributes.Max()), ess_bdr_y(mesh->bdr_attributes.Max());
 
 	ess_bdr_x = 0;
 	ess_bdr_x[2] = 1; // right edge
@@ -118,18 +189,30 @@ int main(int argc, char *argv[])
 	ess_bdr_y = 0;
 	ess_bdr_y[2] = 1; // right edge
 
-	fespace->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listx, 0);
-	fespace->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listy, 1);
-
-	Array<int> ess_tdof_list; // Arrange all true dofs in one array.
-
-	ess_tdof_list.Append(ess_tdof_listx);
-	ess_tdof_list.Append(ess_tdof_listy);
+	// fespace->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listx, 0);
+	// fespace->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listy, 1);
 
 	// To project BCs in the loop, define scalar tdof lists for each component.
 	Array<int> ess_tdof_listbcx, ess_tdof_listbcy;
 	fespacebc->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listbcx, 0);
 	fespacebc->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listbcy, 0);
+	// determineDircheletDof(mesh, ess_tdof_listbcx, ess_tdof_listbcy);
+	// determineDirichletDof(*mesh, *fespace, ess_tdof_listbcx, ess_tdof_listbcy);
+	// {
+
+	// 	if (!nodes)
+	// 	{
+	// 		std::cerr << "Mesh has no nodes! Did you forget SetCurvature()?" << std::endl;
+	// 		std::cout << "Press Enter to continue...";
+	// 		std::cin.get(); // Waits until Enter is pressed
+	// 	}
+	// 	else
+	// 	{
+	// 		std::cout << "Nodes exists";
+	// 		std::cout << "Press Enter to continue...";
+	// 		std::cin.get(); // Waits until Enter is pressed
+	// 	}
+	// }
 
 	// Define vectors for each displacement to apply BCs in the loop.
 	Vector dispbcx(mesh->bdr_attributes.Size()), dispbcy(mesh->bdr_attributes.Size());
@@ -145,9 +228,53 @@ int main(int argc, char *argv[])
 								 { return 0.0; });
 	FunctionCoefficient v0_coeff([](const Vector &x)
 								 { return 0.0; });
-	// initialize_velocity(inputParameters);
-	u.ProjectCoefficient(u0_coeff);
+	// u.ProjectCoefficient(u0_coeff);
 	v.ProjectCoefficient(v0_coeff);
+	u = 0.0;
+	v = 0.0;
+	a = 0.0;
+	{
+		cout << "the norms of u, v, and a are" << u.Norml2() << ", " << v.Norml2() << ", " << a.Norml2() << "\n"; // L2 (Euclidean) norm
+	}
+
+	// VectorFunctionCoefficient sel_nodes_coeff(2, [](const Vector &x, Vector &v)
+	// 										  {
+	// 											  v.SetSize(x.Size());
+	// 											  v = 0.0;
+	// 											  mfem::Vector c{2.5, 2.5}, pt(x);
+	// 											  // 	for (int i = 0; i < ndofs; ++i)
+	// 											  // 	{
+	// 											  // 		std::cout << i;
+	// 											  //
+	// 											  // 		pt[0] = (*nodes)(i);
+	// 											  // 		pt[1] = (*nodes)(i + ndofs);
+	// 											  // 		pt -= c;
+	// 											  //
+
+	// 											  // Example: assign based on position x = (x[0], x[1])
+	// 											  if (pt.Norml2() > 2.5){
+	// 											  v[0] = 1.0; // x-component
+	// 											  v[1] = 1.0; // y-component
+	// 											  } });
+
+	GridFunction sel_nodes(fespacebc);
+	sel_nodes = 0.0;
+	// for (int n = 0; n < ndofs; n++)
+	for (int i = 0; i < ess_tdof_listbcx.Size(); i++)
+	{
+		int idx = ess_tdof_listbcx[i];
+		// std::cout << "idx :" << idx << "\n";
+		sel_nodes(idx) = 1.0;
+	}
+
+	// for (auto i : ess_tdof_listbcx)
+	// {
+	// 	std::cout << i << "\n";
+	// 	sel_nodes(i) = 1.0;
+	// 	std::cout << sel_nodes(i) << "\n";
+	// }
+	// sel_nodes.ProjectCoefficient(sel_nodes_coeff);
+	// createNodeGridFunction(sel_nodes, ess_tdof_list);
 
 	// Force vector if non-zero tractions are applied.
 	VectorArrayCoefficient traction(dim);
@@ -195,6 +322,7 @@ int main(int argc, char *argv[])
 
 	GridFunction u_new(u);
 	Vector rhs(fespace->GetVSize()); // Full-sized RHS
+	rhs = 0.0;
 	ConstantCoefficient zero(0.0);
 
 	// Initialize GlobalStressStrain object. Initialize stress and strain grid functions.
@@ -210,7 +338,8 @@ int main(int argc, char *argv[])
 	// Inititialize Paraview object
 	ParaViewDataCollection pvdc("Waves2D", mesh);
 	ofstream pointDisplacement;
-	saveResults(inputParameters, pvdc, pointDisplacement, order, u, eps, sig);
+
+	saveResults(inputParameters, pvdc, pointDisplacement, order, u, eps, sig, sel_nodes);
 
 	const int selectNode = 2;
 	int cycle = 0;
@@ -277,8 +406,6 @@ int main(int argc, char *argv[])
 
 		// PWConstCoefficient for Dirichlet BCs by boundary attribute.
 		PWConstCoefficient dircx(dispbcx), dircy(dispbcy);
-		dircx = 0.0;
-		dircy = 0.0;
 		GridFunction ux(fespacebc), uy(fespacebc);
 		ux = uy = 0.0;
 
@@ -326,8 +453,6 @@ int main(int argc, char *argv[])
 		cycle++;
 	}
 
-	cout << "Loop completed." << endl;
-
 	pointDisplacement.close();
 
 	//   Free the used memory.
@@ -372,6 +497,7 @@ void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const S
 	// Ku *= -1;
 
 	Vector a0(u.Size());
+	a0 = 0.0;
 	CGSolver cg;
 	cg.SetOperator(M);
 	cg.SetRelTol(1e-12);
@@ -394,6 +520,7 @@ void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const S
 	K.Mult(u, Ku);
 
 	Vector a0(u.Size());
+	a0 = 0.0;
 	CGSolver cg;
 	cg.SetOperator(M);
 	cg.SetRelTol(1e-12);
@@ -446,7 +573,7 @@ bool readInputParameters(int argc, char *argv[], json &inputParameters)
 	return 0;
 }
 
-int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ)
+int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, mfem::GridFunction &nodes)
 {
 	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
 	std::string pointDataFile = resultsFolder + "/" + "pointDisplacement.dat";
@@ -462,6 +589,8 @@ int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstre
 	pvdc.SetLevelsOfDetail(order);	   // Optional: for visualization
 	pvdc.SetHighOrderOutput(true);	   // Keep high-order info
 	pvdc.RegisterField("u", &u);	   // Associate displacement field with data collection
+
+	pvdc.RegisterField("nodes", &nodes);
 
 	bool computeStressStrain = inputParameters.value("computeStressStrain", true);
 	if (computeStressStrain)
@@ -497,6 +626,8 @@ std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatPro
 	brainMatProps.E = inputParameters["Physical Parameters"]["youngmod"];
 	brainMatProps.ν = inputParameters["Physical Parameters"]["poissonratio"];
 	brainMatProps.ρ = inputParameters["Physical Parameters"]["Density"];
+	std::cout << "the density is" << brainMatProps.ρ << "\n";
+
 	cout << "Physical parameters read" << endl;
 
 	brainSimProps.t_final = inputParameters["Simulation Parameters"]["Total Simulation Time"];
@@ -529,8 +660,81 @@ std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatPro
 		u_data << "CFL time\t" << CFL_dt << endl;
 		u_data << "Time Steps \t" << brainSimProps.N << endl;
 		u_data << "Data storage time interval \t" << brainSimProps.dt_save << endl;
+		u_data << "\n\n";
+		u_data << "Mesh Details";
+		u_data << "\n\n";
+		u_data << "order: " << inputParameters["Mesh Parameters"]["order"] << "\n";
+		u_data << "ref_levels: " << inputParameters["Mesh Parameters"]["ref_levels"] << "\n";
+		u_data << "Number of elements: " << Ω->GetNE() << "\n";
 	}
 
 	u_data.close();
 	return {};
 };
+
+int determineDirichletDof(const mfem::Mesh &mesh,
+						  const mfem::FiniteElementSpace &fespace,
+						  mfem::Array<int> &ess_tdof_listx,
+						  mfem::Array<int> &ess_tdof_listy)
+{
+
+	mfem::Array<int> all_bdr_attr_selector(mesh.bdr_attributes.Max());
+	all_bdr_attr_selector = 1;
+
+	mfem::Array<int> bdr_nodes_list;
+	fespace.GetEssentialTrueDofs(all_bdr_attr_selector, bdr_nodes_list);
+	// const mfem::GridFunction *nodes = mesh.GetNodes();
+	// MFEM_VERIFY(nodes, "Mesh has no nodes. Did you call SetCurvature or SetNodalFESpace?");
+	mfem::Vector c{2.5, 2.5};
+	// for (int i = 0; i < ndofs; ++i)
+	// {
+	// 	std::cout << i << "\n";
+	// 	mfem::Vector pt(2);
+	// 	pt[0] = (*nodes)(i);
+	// 	pt[1] = (*nodes)(i + ndofs);
+	// 	// pt -= c;
+
+	// 	if (pt[0] > 4.5 && pt[0] < 5.5 && pt[1] > 1.0)
+	// 	{
+	// 		std::cout << pt[0] << " " << pt[1] << std::endl;
+	// 		ess_tdof_listx.Append(i);
+	// 		ess_tdof_listy.Append(i);
+	// 	}
+	// }
+	return 0;
+}
+
+int createNodeGridFunction(mfem::GridFunction &sel_nodes, const mfem::Array<int> &ess_tdof_list)
+{
+	// const GridFunction *nodes_ptr = mesh->GetNodes();
+
+	// if (!nodes_ptr)
+	// {
+	// 	std::cerr << "Error: mesh does not have nodes. Did you call mesh.SetCurvature(...)?" << std::endl;
+	// 	return 1;
+	// }
+
+	// int num_nodes = nodes_ptr->Size(); // total # of entries
+	// int vdim = nodes_ptr->VectorDim(); // dimension of coordinates
+	// int ndofs = num_nodes / vdim;	   // number of actual nodes
+
+	for (auto i : ess_tdof_list)
+	{
+		sel_nodes(i) = 1.0;
+	}
+	// for (int i = 0; i < ndofs; ++i)
+	// {
+	// 	out << i;
+	// 	for (int d = 0; d < vdim; ++d)
+	// 	{
+	// 		nodes(i + d * ndofs) = (*nodes_ptr)(i + d * ndofs);
+	// 	}
+	// }
+
+	return 0;
+}
+
+#include <cmath>
+#include <limits>
+
+// Jacobi rotation to compute eigenvalues of a symmetric matrix

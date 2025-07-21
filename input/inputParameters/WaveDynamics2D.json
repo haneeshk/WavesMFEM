@@ -3,7 +3,7 @@
 	"computeStressStrain": false,
 	
 	"Simulation Parameters": {
-		"Total Simulation Time": 1.0,
+		"Total Simulation Time": 3.0,
 		"Data Storage Time Interval": 0.05,
 		 "Simulation Time Step" : 0.001,		 
 		"Mesh Parameters": {
@@ -16,8 +16,8 @@
 
 "Mesh Parameters": {
 		"meshFileName": "./input/meshes/Rectangle-quad.mesh",
-		"order": 3,
-		"ref_levels":3,
+		"order": 2,
+		"ref_levels":2,
 		"visualization": false,
 		"static_cond" : false
 	},
