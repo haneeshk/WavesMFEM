@@ -194,10 +194,10 @@ int main(int argc, char *argv[])
 
 	// To project BCs in the loop, define scalar tdof lists for each component.
 	Array<int> ess_tdof_listbcx, ess_tdof_listbcy;
-	fespacebc->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listbcx, 0);
-	fespacebc->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listbcy, 0);
-	// determineDircheletDof(mesh, ess_tdof_listbcx, ess_tdof_listbcy);
-	// determineDirichletDof(*mesh, *fespace, ess_tdof_listbcx, ess_tdof_listbcy);
+	// fespacebc->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listbcx, 0);
+	// fespacebc->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listbcy, 0);
+
+	determineDirichletDof(*mesh, *fespace, ess_tdof_listbcx, ess_tdof_listbcy);
 	// {
 
 	// 	if (!nodes)
@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < ess_tdof_listbcx.Size(); i++)
 	{
 		int idx = ess_tdof_listbcx[i];
-		// std::cout << "idx :" << idx << "\n";
+		std::cout << "idx :" << idx << "\n";
 		sel_nodes(idx) = 1.0;
 	}
 
@@ -682,25 +682,33 @@ int determineDirichletDof(const mfem::Mesh &mesh,
 	all_bdr_attr_selector = 1;
 
 	mfem::Array<int> bdr_nodes_list;
-	fespace.GetEssentialTrueDofs(all_bdr_attr_selector, bdr_nodes_list);
-	// const mfem::GridFunction *nodes = mesh.GetNodes();
+	fespace.GetEssentialTrueDofs(all_bdr_attr_selector, bdr_nodes_list, 0);
+	const mfem::GridFunction *nodes_ptr = mesh.GetNodes();
+	int num_nodes = nodes_ptr->Size(); // total # of entries
+	int vdim = nodes_ptr->VectorDim(); // dimension of coordinates
+	int ndofs = num_nodes / vdim;	   // number of actual nodes
+
 	// MFEM_VERIFY(nodes, "Mesh has no nodes. Did you call SetCurvature or SetNodalFESpace?");
 	mfem::Vector c{2.5, 2.5};
-	// for (int i = 0; i < ndofs; ++i)
-	// {
-	// 	std::cout << i << "\n";
-	// 	mfem::Vector pt(2);
-	// 	pt[0] = (*nodes)(i);
-	// 	pt[1] = (*nodes)(i + ndofs);
-	// 	// pt -= c;
+	cout << "nodes_ptr.Size(): " << nodes_ptr->Size() << "\n";
+	double ϵ = 0.0001;
+	for (auto nd : bdr_nodes_list)
+	{
 
-	// 	if (pt[0] > 4.5 && pt[0] < 5.5 && pt[1] > 1.0)
-	// 	{
-	// 		std::cout << pt[0] << " " << pt[1] << std::endl;
-	// 		ess_tdof_listx.Append(i);
-	// 		ess_tdof_listy.Append(i);
-	// 	}
-	// }
+		mfem::Vector pt(2);
+
+		pt[0] = (*nodes_ptr)(nd);
+		pt[1] = (*nodes_ptr)(nd + ndofs);
+
+		// 	// pt -= c;
+
+		if (std::abs(pt[0] - 5.0) < ϵ && std::abs(pt[1] - 2.5) < 1.0)
+		{
+			std::cout << "nd is: " << nd << "{" << pt[0] << "," << pt[1] << "}," << std::endl;
+			ess_tdof_listx.Append(nd);
+			ess_tdof_listy.Append(nd);
+		}
+	}
 	return 0;
 }
 
