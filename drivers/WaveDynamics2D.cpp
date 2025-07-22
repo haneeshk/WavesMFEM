@@ -164,15 +164,6 @@ int main(int argc, char *argv[])
 	// }
 
 	GridFunction u(fespace), v(fespace), a(fespace);
-
-	// Initial conditions
-
-	FunctionCoefficient u0_coeff([](const Vector &x)
-								 { return 0.0; });
-	FunctionCoefficient v0_coeff([](const Vector &x)
-								 { return 0.0; });
-	// u.ProjectCoefficient(u0_coeff);
-	v.ProjectCoefficient(v0_coeff);
 	u = 0.0;
 	v = 0.0;
 	a = 0.0;
@@ -313,10 +304,6 @@ int main(int argc, char *argv[])
 		add(u, u, temp);										  // 2u_n
 		add(temp, -1.0, u_old, temp);							  // 2u_n - u_{n-1}
 		add(temp, brainSimProps.Δt * brainSimProps.Δt, a, u_new); // u_{n+1}
-
-		// Project Dirichlet BCs back onto GridFunction. Each vector component on a bdr_attribute can have different BC.
-		// A rather convoluted approach is taken here since I could not find a way with MFEM's data structures.
-		// Perhaps a neater way can be found in the future.
 
 		{
 			int i = 0;
