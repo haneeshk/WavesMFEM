@@ -41,71 +41,18 @@ struct simProps
 	int n_save;
 };
 
-void JacobiEigenvalues(const mfem::DenseMatrix &A, mfem::Vector &eigenvalues, int max_iter = 100, double tol = 1e-12)
-{
-	const int n = A.Height();
-	MFEM_VERIFY(A.Width() == n, "Matrix must be square");
+std::tuple<int, int, int> GetNodeInfo(const mfem::GridFunction *nodes_ptr);
 
-	mfem::DenseMatrix M(A); // make a copy to work on
-	eigenvalues.SetSize(n);
-
-	for (int iter = 0; iter < max_iter; ++iter)
-	{
-		// Find largest off-diagonal element
-		int p = 0, q = 1;
-		double max_val = std::abs(M(0, 1));
-		for (int i = 0; i < n; ++i)
-		{
-			for (int j = i + 1; j < n; ++j)
-			{
-				double val = std::abs(M(i, j));
-				if (val > max_val)
-				{
-					max_val = val;
-					p = i;
-					q = j;
-				}
-			}
-		}
-
-		// Converged?
-		if (max_val < tol)
-			break;
-
-		double θ = 0.5 * std::atan2(2.0 * M(p, q), M(q, q) - M(p, p));
-		double c = std::cos(θ);
-		double s = std::sin(θ);
-
-		// Rotate
-		for (int i = 0; i < n; ++i)
-		{
-			if (i != p && i != q)
-			{
-				double Mip = M(i, p);
-				double Miq = M(i, q);
-				M(i, p) = M(p, i) = c * Mip - s * Miq;
-				M(i, q) = M(q, i) = s * Mip + c * Miq;
-			}
-		}
-
-		double Mpp = M(p, p);
-		double Mqq = M(q, q);
-		double Mpq = M(p, q);
-		M(p, p) = c * c * Mpp - 2 * s * c * Mpq + s * s * Mqq;
-		M(q, q) = s * s * Mpp + 2 * s * c * Mpq + c * c * Mqq;
-		M(p, q) = M(q, p) = 0.0;
-	}
-
-	// Fill in diagonal as eigenvalues
-	for (int i = 0; i < n; ++i)
-		eigenvalues[i] = M(i, i);
-}
 int createNodeGridFunction(mfem::GridFunction &sel_nodes, const mfem::Array<int> &ess_tdof_list);
 
+double hat_u_x_zero(const mfem::Vector &pt);
+double hat_u_y_zero(const mfem::Vector &pt);
 int determineDirichletDof(const mfem::Mesh &mesh,
 						  const mfem::FiniteElementSpace &fespace,
 						  mfem::Array<int> &ess_tdof_listx,
 						  mfem::Array<int> &ess_tdof_listy);
+int createDirichletVals(const GridFunction *nodes_ptr, mfem::Array<int> &ess_tdof_listbcx, mfem::Array<int> &ess_tdof_listbcy, std::function<double(const mfem::Vector &)> hat_u_x_func, std::function<double(const mfem::Vector &)> hat_u_y_func, mfem::Vector &hat_u_x, mfem::Vector &hat_u_y);
+
 std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatProps, simProps &brainSimProps, mfem::Mesh *Ω);
 int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, GridFunction &nodes);
 FunctionCoefficient initialize_velocity(const json &inputParameters);
@@ -160,10 +107,10 @@ int main(int argc, char *argv[])
 	GridFunction *nodes = mesh->GetNodes();
 	MFEM_VERIFY(nodes, "Mesh must be created with generate_nodes = true");
 	const int vdim = nodes->VectorDim(); // Should be 2 for 2D
-	const int ndofs = nodes->FESpace()->GetNDofs();
+	const int num_nodes = fespace->GetNDofs();
 	cout << "vdim" << vdim << endl;
 	cout << "node->Size()" << nodes->Size() << endl;
-	cout << "ndofs" << ndofs << endl;
+	cout << "num_nodes" << num_nodes << endl;
 
 	// Define an L2 finite element space for element strain and stress.
 	// Dimension of the L2 finite element space is the number of strain and stress components.
@@ -198,6 +145,8 @@ int main(int argc, char *argv[])
 	// fespacebc->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listbcy, 0);
 
 	determineDirichletDof(*mesh, *fespace, ess_tdof_listbcx, ess_tdof_listbcy);
+	Vector hat_u_x(ess_tdof_listbcx.Size()), hat_u_y(ess_tdof_listbcy.Size());
+	createDirichletVals(nodes, ess_tdof_listbcx, ess_tdof_listbcy, hat_u_x_zero, hat_u_y_zero, hat_u_x, hat_u_y);
 	// {
 
 	// 	if (!nodes)
@@ -214,12 +163,6 @@ int main(int argc, char *argv[])
 	// 	}
 	// }
 
-	// Define vectors for each displacement to apply BCs in the loop.
-	Vector dispbcx(mesh->bdr_attributes.Size()), dispbcy(mesh->bdr_attributes.Size());
-	//------------------------------------------------------------------------------------------------------------------
-
-	//------------------------------------------------------------------------------------------------------------------
-	// Create and initialize displacement, velocity, and acceleration grid functions.
 	GridFunction u(fespace), v(fespace), a(fespace);
 
 	// Initial conditions
@@ -233,9 +176,6 @@ int main(int argc, char *argv[])
 	u = 0.0;
 	v = 0.0;
 	a = 0.0;
-	{
-		cout << "the norms of u, v, and a are" << u.Norml2() << ", " << v.Norml2() << ", " << a.Norml2() << "\n"; // L2 (Euclidean) norm
-	}
 
 	// VectorFunctionCoefficient sel_nodes_coeff(2, [](const Vector &x, Vector &v)
 	// 										  {
@@ -259,22 +199,13 @@ int main(int argc, char *argv[])
 
 	GridFunction sel_nodes(fespacebc);
 	sel_nodes = 0.0;
-	// for (int n = 0; n < ndofs; n++)
+
 	for (int i = 0; i < ess_tdof_listbcx.Size(); i++)
 	{
 		int idx = ess_tdof_listbcx[i];
 		std::cout << "idx :" << idx << "\n";
 		sel_nodes(idx) = 1.0;
 	}
-
-	// for (auto i : ess_tdof_listbcx)
-	// {
-	// 	std::cout << i << "\n";
-	// 	sel_nodes(i) = 1.0;
-	// 	std::cout << sel_nodes(i) << "\n";
-	// }
-	// sel_nodes.ProjectCoefficient(sel_nodes_coeff);
-	// createNodeGridFunction(sel_nodes, ess_tdof_list);
 
 	// Force vector if non-zero tractions are applied.
 	VectorArrayCoefficient traction(dim);
@@ -387,41 +318,20 @@ int main(int argc, char *argv[])
 		// A rather convoluted approach is taken here since I could not find a way with MFEM's data structures.
 		// Perhaps a neater way can be found in the future.
 
-		dispbcx = dispbcy = 0.0; // Vectors to prescribe Dirichlet BCs by bdr_attribute
-		// dispbcx(1) = dirichletamp(inputParameters, t); // Constant Non-zero Dirichlet BCs only on bdr_attributes in the x/z component.
-
-		// Lambda functions to prescribe spatially dependent Dirichlet BCs.
-
-		// FunctionCoefficient dircx([t, &mu, &rho, &l, &B1, &eps](const Vector &xcoords)
-		//                           {
-		//     if (xcoords(2) < 0.00001)
-		//         return - B1 * xcoords(1) * cos(eps + (π * t * sqrt(mu/rho))/l);
-		//     else return 0.0; });
-
-		// FunctionCoefficient dircy([t, &mu, &rho, &l, &B1, &eps](const Vector &xcoords)
-		//                           {
-		//     if (xcoords(2) < 0.00001)
-		//         return B1 * xcoords(0) * cos(eps + (π * t * sqrt(mu/rho))/l);
-		//     else return 0.0; });
-
-		// PWConstCoefficient for Dirichlet BCs by boundary attribute.
-		PWConstCoefficient dircx(dispbcx), dircy(dispbcy);
-		GridFunction ux(fespacebc), uy(fespacebc);
-		ux = uy = 0.0;
-
-		ux.ProjectBdrCoefficient(dircx, ess_bdr_x);
-		uy.ProjectBdrCoefficient(dircy, ess_bdr_y);
-
-		// For loops to replace vector grid function degrees of freedom with presribed Dirichlet values
-		for (int i = 0; i < ess_tdof_listbcx.Size(); i++)
 		{
-			int vdof = fespace->DofToVDof(ess_tdof_listbcx[i], 0);
-			u_new(vdof) = ux(ess_tdof_listbcx[i]);
-		}
-		for (int i = 0; i < ess_tdof_listbcy.Size(); i++)
-		{
-			int vdof = fespace->DofToVDof(ess_tdof_listbcy[i], 1);
-			u_new(vdof) = uy(ess_tdof_listbcy[i]);
+			int i = 0;
+			for (auto nd : ess_tdof_listbcx)
+			{
+				u_new(nd) = hat_u_x(i);
+				i++;
+			}
+
+			i = 0;
+			for (auto nd : ess_tdof_listbcy)
+			{
+				u_new(nd + num_nodes) = hat_u_y(i);
+				i++;
+			}
 		}
 
 		u_old = u;
@@ -674,8 +584,8 @@ std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatPro
 
 int determineDirichletDof(const mfem::Mesh &mesh,
 						  const mfem::FiniteElementSpace &fespace,
-						  mfem::Array<int> &ess_tdof_listx,
-						  mfem::Array<int> &ess_tdof_listy)
+						  mfem::Array<int> &ess_tdof_listbcx,
+						  mfem::Array<int> &ess_tdof_listbcy)
 {
 
 	mfem::Array<int> all_bdr_attr_selector(mesh.bdr_attributes.Max());
@@ -684,9 +594,8 @@ int determineDirichletDof(const mfem::Mesh &mesh,
 	mfem::Array<int> bdr_nodes_list;
 	fespace.GetEssentialTrueDofs(all_bdr_attr_selector, bdr_nodes_list, 0);
 	const mfem::GridFunction *nodes_ptr = mesh.GetNodes();
-	int num_nodes = nodes_ptr->Size(); // total # of entries
-	int vdim = nodes_ptr->VectorDim(); // dimension of coordinates
-	int ndofs = num_nodes / vdim;	   // number of actual nodes
+
+	auto [num_dofs, vdim, num_nodes] = GetNodeInfo(nodes_ptr);
 
 	// MFEM_VERIFY(nodes, "Mesh has no nodes. Did you call SetCurvature or SetNodalFESpace?");
 	mfem::Vector c{2.5, 2.5};
@@ -694,19 +603,22 @@ int determineDirichletDof(const mfem::Mesh &mesh,
 	double ϵ = 0.0001;
 	for (auto nd : bdr_nodes_list)
 	{
-
 		mfem::Vector pt(2);
 
 		pt[0] = (*nodes_ptr)(nd);
-		pt[1] = (*nodes_ptr)(nd + ndofs);
+		pt[1] = (*nodes_ptr)(nd + num_nodes);
 
-		// 	// pt -= c;
-
-		if (std::abs(pt[0] - 5.0) < ϵ && std::abs(pt[1] - 2.5) < 1.0)
+		if (std::abs(pt[0] - 5.0) < ϵ /*&& std::abs(pt[1] - 2.5) < 1.0*/)
 		{
 			std::cout << "nd is: " << nd << "{" << pt[0] << "," << pt[1] << "}," << std::endl;
-			ess_tdof_listx.Append(nd);
-			ess_tdof_listy.Append(nd);
+			ess_tdof_listbcx.Append(nd);
+		}
+
+		if (std::abs(pt[0] - 5.0) < ϵ /*&& std::abs(pt[1] - 2.5) < 1.0*/)
+		{
+			std::cout << "nd is: " << nd << "{" << pt[0] << "," << pt[1] << "}," << std::endl;
+
+			ess_tdof_listbcy.Append(nd);
 		}
 	}
 	return 0;
@@ -714,35 +626,68 @@ int determineDirichletDof(const mfem::Mesh &mesh,
 
 int createNodeGridFunction(mfem::GridFunction &sel_nodes, const mfem::Array<int> &ess_tdof_list)
 {
-	// const GridFunction *nodes_ptr = mesh->GetNodes();
-
-	// if (!nodes_ptr)
-	// {
-	// 	std::cerr << "Error: mesh does not have nodes. Did you call mesh.SetCurvature(...)?" << std::endl;
-	// 	return 1;
-	// }
-
-	// int num_nodes = nodes_ptr->Size(); // total # of entries
-	// int vdim = nodes_ptr->VectorDim(); // dimension of coordinates
-	// int ndofs = num_nodes / vdim;	   // number of actual nodes
 
 	for (auto i : ess_tdof_list)
 	{
 		sel_nodes(i) = 1.0;
 	}
-	// for (int i = 0; i < ndofs; ++i)
-	// {
-	// 	out << i;
-	// 	for (int d = 0; d < vdim; ++d)
-	// 	{
-	// 		nodes(i + d * ndofs) = (*nodes_ptr)(i + d * ndofs);
-	// 	}
-	// }
 
 	return 0;
 }
 
-#include <cmath>
-#include <limits>
+double hat_u_x_zero(const mfem::Vector &pt)
+{
+	double x1 = pt[0];
+	double x2 = pt[1];
+	return 0.0;
+}
 
-// Jacobi rotation to compute eigenvalues of a symmetric matrix
+double hat_u_y_zero(const mfem::Vector &pt)
+{
+	double x1 = pt[0];
+	double x2 = pt[1];
+	return 0.0;
+}
+
+int createDirichletVals(const GridFunction *nodes_ptr, mfem::Array<int> &ess_tdof_listbcx, mfem::Array<int> &ess_tdof_listbcy, std::function<double(const mfem::Vector &)> hat_u_x_func, std::function<double(const mfem::Vector &)> hat_u_y_func, mfem::Vector &hat_u_x, mfem::Vector &hat_u_y)
+{
+	auto [num_dofs, vdim, num_nodes] = GetNodeInfo(nodes_ptr);
+	mfem::Vector pt{0.0, 0.0};
+	int i = 0;
+	for (auto nd : ess_tdof_listbcx)
+	{
+
+		pt[0] = (*nodes_ptr)(nd);
+		pt[1] = (*nodes_ptr)(nd + num_nodes);
+		hat_u_x(i) = hat_u_x_func(pt);
+		i++;
+	}
+	i = 0;
+	for (auto nd : ess_tdof_listbcy)
+	{
+
+		pt[0] = (*nodes_ptr)(nd);
+		pt[1] = (*nodes_ptr)(nd + num_nodes);
+		hat_u_y(i) = hat_u_y_func(pt);
+		i++;
+	}
+
+	return 0;
+}
+
+std::tuple<int, int, int> GetNodeInfo(const mfem::GridFunction *nodes_ptr)
+{
+	if (!nodes_ptr)
+	{
+		throw std::invalid_argument("Error: nodes_ptr is null.");
+	}
+
+	int num_dofs = nodes_ptr->Size();  // total number of entries
+	int vdim = nodes_ptr->VectorDim(); // dimension of coordinates
+	int num_nodes = num_dofs / vdim;   // number of actual nodes
+
+	return std::make_tuple(num_dofs, vdim, num_nodes);
+}
+
+// TODO: clean yo "createNodeGridFunction". There is a lot of commented stuff in it.
+// TODO: need to be able to start a simulation from the results of a previous simulation.
