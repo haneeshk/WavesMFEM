@@ -69,8 +69,7 @@ int main(int argc, char *argv[])
 	simProps brainSimProps;
 	readInputParameters(argc, argv, inputParameters);
 	bool computeStressStrain = inputParameters.value("computeStressStrain", true);
-	//   Parse command-line options.
-	// const char *mesh_file = "./input/meshes/Rectangle-quad.mesh"; // Change this line, include 2D mesh file.
+
 	std::string mesh_file_str = inputParameters["Mesh Parameters"]["meshFileName"];
 	const char *mesh_file = mesh_file_str.c_str();
 	int order = inputParameters["Mesh Parameters"]["order"];
@@ -123,11 +122,6 @@ int main(int argc, char *argv[])
 	l2fespace = new FiniteElementSpace(mesh, l2fec, 3);
 	const int num_els = l2fespace->GetNDofs();
 
-	//------------------------------------------------------------------------------------------------------------------
-
-	//------------------------------------------------------------------------------------------------------------------
-	//    Determine the list of essential boundary dofs for each vector dimension.
-
 	Array<int> ess_bdr_x(mesh->bdr_attributes.Max()), ess_bdr_y(mesh->bdr_attributes.Max());
 
 	ess_bdr_x = 0;
@@ -136,32 +130,11 @@ int main(int argc, char *argv[])
 	ess_bdr_y = 0;
 	ess_bdr_y[2] = 1; // right edge
 
-	// fespace->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listx, 0);
-	// fespace->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listy, 1);
-
-	// To project BCs in the loop, define scalar tdof lists for each component.
 	Array<int> ess_tdof_listbcx, ess_tdof_listbcy;
-	// fespacebc->GetEssentialTrueDofs(ess_bdr_x, ess_tdof_listbcx, 0);
-	// fespacebc->GetEssentialTrueDofs(ess_bdr_y, ess_tdof_listbcy, 0);
 
 	determineDirichletDof(*mesh, *fespace, ess_tdof_listbcx, ess_tdof_listbcy);
 	Vector hat_u_x(ess_tdof_listbcx.Size()), hat_u_y(ess_tdof_listbcy.Size());
 	createDirichletVals(nodes, ess_tdof_listbcx, ess_tdof_listbcy, hat_u_x_zero, hat_u_y_zero, hat_u_x, hat_u_y);
-	// {
-
-	// 	if (!nodes)
-	// 	{
-	// 		std::cerr << "Mesh has no nodes! Did you forget SetCurvature()?" << std::endl;
-	// 		std::cout << "Press Enter to continue...";
-	// 		std::cin.get(); // Waits until Enter is pressed
-	// 	}
-	// 	else
-	// 	{
-	// 		std::cout << "Nodes exists";
-	// 		std::cout << "Press Enter to continue...";
-	// 		std::cin.get(); // Waits until Enter is pressed
-	// 	}
-	// }
 
 	GridFunction u(fespace), v(fespace), a(fespace);
 	u = 0.0;
@@ -277,9 +250,7 @@ int main(int argc, char *argv[])
 
 	for (double t = brainSimProps.Δt; t <= brainSimProps.t_final; t += brainSimProps.Δt)
 	{
-		// std::cout << t << std::endl;
 
-		// Specify and assemble traction on rhs.
 		tr = 0.0;
 		tr(0) = tractionamp(inputParameters, t);
 
@@ -293,8 +264,7 @@ int main(int argc, char *argv[])
 		Vector F(*f);
 		delete f;
 
-		// rhs = F - K u
-		K.Mult(u, rhs);
+		K.Mult(u, rhs); // rhs = F - K u
 		// rhs *= -1; // comment this if prescribing non-zero tractions.
 		add(F, -1.0, rhs, rhs); // un-comment this if prescribing non-zero tractions.
 
@@ -324,8 +294,6 @@ int main(int argc, char *argv[])
 		u_old = u;
 		u = u_new;
 
-		// Compute  strain and stress
-
 		if (computeStressStrain)
 		{
 			WaveDynamics.GlobalStrain(u_new, eps);
@@ -340,7 +308,7 @@ int main(int argc, char *argv[])
 
 		if ((cycle % brainSimProps.n_save) == 0)
 		{
-			// std::cout << "saving data" << std::endl;
+
 			pointDisplacement << std::fixed << std::setprecision(10) << t << "\t" << u(selectNode) << "\n";
 			pvdc.SetCycle(cycle); // Record time step number
 			pvdc.SetTime(t);	  // Record simulation time
@@ -352,7 +320,6 @@ int main(int argc, char *argv[])
 
 	pointDisplacement.close();
 
-	//   Free the used memory.
 	cout << "Output saved. " << endl;
 
 	delete fespace;
@@ -676,5 +643,10 @@ std::tuple<int, int, int> GetNodeInfo(const mfem::GridFunction *nodes_ptr)
 	return std::make_tuple(num_dofs, vdim, num_nodes);
 }
 
-// TODO: clean yo "createNodeGridFunction". There is a lot of commented stuff in it.
+// DONE: clean yo "createNodeGridFunction". There is a lot of commented stuff in it.
+
+// TODO: Remove the u_y displacement boundary condition. However, now the problem has no constraings in the y direction.
 // TODO: need to be able to start a simulation from the results of a previous simulation.
+// TODO: Change geometry to CDisk.
+// TODO: Change geometry to Disk with two holes.
+// TODO: Add spatially varing Elastic Properties.
