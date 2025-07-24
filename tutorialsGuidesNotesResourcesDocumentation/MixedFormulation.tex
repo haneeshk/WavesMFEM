@@ -1,0 +1,190 @@
+%===============================================================================
+%  Universal LaTeX template for "serious" mathematics
+%  -----------------------------------------------------------------------------
+%  Features
+%    • utf8 input, modern fonts (Latin Modern + math)
+%    • micro‑typography, clever quoting, hyperlinks
+%    • AMS math, physics, accents, bm, mathtools, siunitx, commutative diagrams
+%    • theorem & proof environments, colourful links, automatic sizing
+%  Compile with lualatex or xelatex for best results (recommended)
+%===============================================================================
+\documentclass[11pt,a4paper]{article}
+
+%-------------------------------------------------------------------------------
+%  Encoding & fonts
+%-------------------------------------------------------------------------------
+\usepackage[utf8]{inputenc}    % input encoding (not needed with Lua/XeLaTeX)
+\usepackage[T1]{fontenc}       % output font encoding
+\usepackage{lmodern}           % Latin Modern fonts (text + math)
+\usepackage{microtype}         % micro‑typography (protrusion + expansion)
+
+%-------------------------------------------------------------------------------
+%  Geometry + appearance
+%-------------------------------------------------------------------------------
+\usepackage[a4paper,margin=3.0cm]{geometry}
+\usepackage{enumitem}          % better control over lists
+\usepackage{xcolor}            % coloured links & accents
+\usepackage{graphicx}          % \includegraphics
+\usepackage{booktabs}          % nicer tables \toprule, \midrule, \bottomrule
+
+%-------------------------------------------------------------------------------
+%  Hyperlinks and references
+%-------------------------------------------------------------------------------
+\usepackage[colorlinks=true,linkcolor=blue!60!black,
+            citecolor=green!40!black,urlcolor=violet]{hyperref}
+% \usepackage{nameinlink,cleveref}   % \cref cross‑refs with automatic names
+
+%-------------------------------------------------------------------------------
+%  Mathematics packages
+%-------------------------------------------------------------------------------
+\usepackage{amsmath,amsfonts,amssymb,amsthm}  % core AMS packages
+\usepackage{mathtools}          % fixes + extends amsmath (\coloneqq etc.)
+\usepackage{physics}            % \qty, \dv, \pdv, bra‑ket notation
+\usepackage{bm}                 % bold symbols in math (\bm{\alpha})
+\usepackage{siunitx}            % units and numbers: \SI{3.0e8}{\metre\per\second}
+\usepackage{tikz-cd}            % commutative diagrams
+\usepackage{tikz}               % general TikZ drawings
+\usetikzlibrary{calc,arrows.meta,decorations.markings}
+
+%-------------------------------------------------------------------------------
+%  Theorem & proof environment setup
+%-------------------------------------------------------------------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+
+%-------------------------------------------------------------------------------
+%  Custom commands
+%-------------------------------------------------------------------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\PP}{\mathbb{P}}
+% \DeclareMathOperator{\grad}{grad}
+% \DeclareMathOperator{\curl}{curl}
+% \DeclareMathOperator{\diver}{div}
+\newcommand{\pr}[1]{\left(#1\right)}
+\newcommand{\ag}[1]{\left[#1\right]}
+\newcommand{\gp}[1]{\left\{#1\right\}}
+\renewcommand{\u}[1]{\boldsymbol{#1}}
+%-------------------------------------------------------------------------------
+%  Title info
+%-------------------------------------------------------------------------------
+\title{Mixed formulation for elasticity}
+\author{APK, and HK}
+\date{\today}
+
+%===============================================================================
+\begin{document}
+\maketitle
+\tableofcontents
+
+%-------------------------------------------------------------------------------
+
+\section{Displacement formulation of Elasticity}
+In genral we solve the equations 
+
+\begin{subequations}
+\begin{align}
+\sigma_{ij,j}&=\rho \ddot{u}_i,\\
+\sigma_{ij}&=2\mu \epsilon_{ij}+\lambda \epsilon_{kk}\delta_{ij},\\
+\epsilon_{ij}&=\frac{1}{2}\pr{u_{i,j}+u_{j,i}}
+\end{align}
+\end{subequations}
+
+Stress in terms of displacements read
+\begin{align}
+\sigma_{ij}&=\mu \pr{u_{i,j}+u_{j,i}}+\lambda u_{k,k}\delta_{ij}
+\label{eq:stress}
+\end{align}
+
+We have the traction from \eqref{eq:stress} to be 
+\begin{align}
+\sigma_{ij}n_j&=\mu \pr{u_{i,j}+u_{j,i}}n_j+\lambda u_{k,k}\delta_{ij}n_j,\\
+t_{i}&=\mu \pr{u_{i,j}+u_{j,i}}n_j+\lambda u_{k,k}n_i
+\end{align}
+
+Combining all the above equations we get
+\begin{subequations}
+\begin{align}
+ \sigma_{ij,j}&=\mu \pr{u_{i,jj}+u_{j,ij}}+\lambda u_{k,kj}\delta_{ij},\\
+ \sigma_{ij,j}&=\mu \pr{u_{i,jj}+u_{j,ij}}+\lambda u_{k,kj}\delta_{ij},\\
+ &=\mu u_{i,jj}+\mu u_{k,ki}+\lambda u_{k,ki},\\
+ &=\mu u_{i,jj}+\pr{\mu+\lambda} u_{k,ki}
+  \label{eq:helmholtz}
+\end{align}
+\end{subequations}
+
+or in co-ordiante free form
+\begin{align}
+\gp{\text{div}\, \u\sigma}&=\mu \nabla^2 \u{u}+\pr{\lambda+\mu}\nabla\pr{\nabla \cdot \u{u}} 
+\end{align}
+
+Thus, the governing equation becomes, 
+\begin{align}
+\mu u_{i,jj}+\pr{\mu+\lambda} u_{k,ki}+f_i&=\rho \ddot{u}_i, \\
+% u_{i}(x_i)&=\hat{u}_i\quad \pr{x_i}\in \Gamma_{g_i}\\
+u_{i}(x_i)&=\hat{u}_i\quad \pr{x_i}\in \Gamma_{g_i}\\
+\mu \pr{u_{i,j}+u_{j,i}}n_j+\lambda u_{k,k}n_i&=\hat{t}_i\quad on \pr{x_i}\in \Gamma_{h_i} 
+\end{align}
+% Equation~\cref{eq:helmholtz} is the Helmholtz equation.
+
+%-------------------------------------------------------------------------------
+\subsection{Finite Element Formulation}
+
+------------------------------------
+\section{Mixed formulation} 
+
+
+\begin{subequations}
+\begin{align}
+  \mu \pr{u_{i,jj}+u_{j,ij}}-\frac{2\mu}{3}u_{k,ki}-p_{,i}&=\rho \ddot{u}_{i},\\
+  p+K u_{i,i}&=0
+\end{align}
+\label{eq:MFGeq}
+\end{subequations}
+
+The equations 
+%-------------------------------------------------------------------------------
+\section{Diagrams}
+
+\begin{center}
+\begin{tikzcd}
+A \arrow[r, "f"] \arrow[d, "g"'] & B \\ C \arrow[ru, "h"']
+\end{tikzcd}
+\end{center}
+
+%-------------------------------------------------------------------------------
+\section{Tables and Figures}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Variable} & \textbf{Value} & \textbf{Unit}\\
+    \midrule
+    Speed of light $c$ & $3.00\times10^8$ & \si{\metre\per\second}\\
+    Planck constant $h$ & $6.626\times10^{-34}$ & \si{\joule\second}\\
+    \bottomrule
+  \end{tabular}
+  \caption{Constants.}
+\end{table}
+
+%-------------------------------------------------------------------------------
+\appendix
+\section{Extra Macros}
+Add any further macro definitions here.
+
+%===============================================================================
+\end{document}

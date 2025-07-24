@@ -54,7 +54,7 @@ int determineDirichletDof(const mfem::Mesh &mesh,
 int createDirichletVals(const GridFunction *nodes_ptr, mfem::Array<int> &ess_tdof_listbcx, mfem::Array<int> &ess_tdof_listbcy, std::function<double(const mfem::Vector &)> hat_u_x_func, std::function<double(const mfem::Vector &)> hat_u_y_func, mfem::Vector &hat_u_x, mfem::Vector &hat_u_y);
 
 std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatProps, simProps &brainSimProps, mfem::Mesh *Ω);
-int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, GridFunction &nodes);
+int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, GridFunction &hat_u_x_nodes, GridFunction &hat_u_y_nodes);
 FunctionCoefficient initialize_velocity(const json &inputParameters);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, const Vector &F, double dt, GridFunction &u_old);
 void InitializeOldSolution(const GridFunction &u, const GridFunction &v, const SparseMatrix &M, const SparseMatrix &K, double dt, GridFunction &u_old);
@@ -70,12 +70,12 @@ int main(int argc, char *argv[])
 	readInputParameters(argc, argv, inputParameters);
 	bool computeStressStrain = inputParameters.value("computeStressStrain", true);
 
-	std::string mesh_file_str = inputParameters["Mesh Parameters"]["meshFileName"];
+	std::string mesh_file_str = inputParameters["Simulation Parameters"]["Mesh Parameters"]["meshFileName"];
 	const char *mesh_file = mesh_file_str.c_str();
-	int order = inputParameters["Mesh Parameters"]["order"];
-	bool static_cond = inputParameters["Mesh Parameters"]["static_cond"];
-	bool visualization = inputParameters["Mesh Parameters"]["visualization"];
-	int ref_levels = inputParameters["Mesh Parameters"]["ref_levels"];
+	int order = inputParameters["Simulation Parameters"]["Mesh Parameters"]["order"];
+	bool static_cond = inputParameters["Simulation Parameters"]["Mesh Parameters"]["static_cond"];
+	bool visualization = inputParameters["Simulation Parameters"]["Mesh Parameters"]["visualization"];
+	int ref_levels = inputParameters["Simulation Parameters"]["Mesh Parameters"]["ref_levels"];
 
 	// Read the mesh from the given mesh file.
 	Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -141,34 +141,24 @@ int main(int argc, char *argv[])
 	v = 0.0;
 	a = 0.0;
 
-	// VectorFunctionCoefficient sel_nodes_coeff(2, [](const Vector &x, Vector &v)
-	// 										  {
-	// 											  v.SetSize(x.Size());
-	// 											  v = 0.0;
-	// 											  mfem::Vector c{2.5, 2.5}, pt(x);
-	// 											  // 	for (int i = 0; i < ndofs; ++i)
-	// 											  // 	{
-	// 											  // 		std::cout << i;
-	// 											  //
-	// 											  // 		pt[0] = (*nodes)(i);
-	// 											  // 		pt[1] = (*nodes)(i + ndofs);
-	// 											  // 		pt -= c;
-	// 											  //
-
-	// 											  // Example: assign based on position x = (x[0], x[1])
-	// 											  if (pt.Norml2() > 2.5){
-	// 											  v[0] = 1.0; // x-component
-	// 											  v[1] = 1.0; // y-component
-	// 											  } });
-
 	GridFunction sel_nodes(fespacebc);
+	GridFunction hat_u_x_nodes(fespacebc), hat_u_y_nodes(fespacebc);
 	sel_nodes = 0.0;
+	hat_u_x_nodes = 0.0;
+	hat_u_y_nodes = 0.0;
 
 	for (int i = 0; i < ess_tdof_listbcx.Size(); i++)
 	{
 		int idx = ess_tdof_listbcx[i];
 		std::cout << "idx :" << idx << "\n";
-		sel_nodes(idx) = 1.0;
+		hat_u_x_nodes(idx) = 1.0;
+	}
+
+	for (int i = 0; i < ess_tdof_listbcy.Size(); i++)
+	{
+		int idy = ess_tdof_listbcy[i];
+		std::cout << "idy :" << idy << "\n";
+		hat_u_y_nodes(idy) = 1.0;
 	}
 
 	// Force vector if non-zero tractions are applied.
@@ -234,7 +224,7 @@ int main(int argc, char *argv[])
 	ParaViewDataCollection pvdc("Waves2D", mesh);
 	ofstream pointDisplacement;
 
-	saveResults(inputParameters, pvdc, pointDisplacement, order, u, eps, sig, sel_nodes);
+	saveResults(inputParameters, pvdc, pointDisplacement, order, u, eps, sig, hat_u_x_nodes, hat_u_y_nodes);
 
 	const int selectNode = 2;
 	int cycle = 0;
@@ -271,8 +261,9 @@ int main(int argc, char *argv[])
 		cg.Mult(rhs, a); // solve M a = rhs
 		// Central difference: u_{n+1} = 2u_n - u_{n-1} + brainSimProps.Δt^2 * a
 		Vector temp(u.Size());
-		add(u, u, temp);										  // 2u_n
-		add(temp, -1.0, u_old, temp);							  // 2u_n - u_{n-1}
+		add(u, u, temp);			  // 2u_n
+		add(temp, -1.0, u_old, temp); // 2u_n - u_{n-1}, temp  ←  temp  +  (-1.0)*u_old
+
 		add(temp, brainSimProps.Δt * brainSimProps.Δt, a, u_new); // u_{n+1}
 
 		{
@@ -437,7 +428,7 @@ bool readInputParameters(int argc, char *argv[], json &inputParameters)
 	return 0;
 }
 
-int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, mfem::GridFunction &nodes)
+int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstream &pointDisplacement, const int order, mfem::GridFunction &u, mfem::GridFunction &ϵ, mfem::GridFunction &σ, mfem::GridFunction &hat_u_x_nodes, mfem::GridFunction &hat_u_y_nodes)
 {
 	std::string resultsFolder = "./results/" + inputParameters["testName"].get<std::string>();
 	std::string pointDataFile = resultsFolder + "/" + "pointDisplacement.dat";
@@ -454,7 +445,8 @@ int saveResults(json &inputParameters, ParaViewDataCollection &pvdc, std::ofstre
 	pvdc.SetHighOrderOutput(true);	   // Keep high-order info
 	pvdc.RegisterField("u", &u);	   // Associate displacement field with data collection
 
-	pvdc.RegisterField("nodes", &nodes);
+	pvdc.RegisterField("hat_u_x_nodes", &hat_u_x_nodes);
+	pvdc.RegisterField("hat_u_y_nodes", &hat_u_y_nodes);
 
 	bool computeStressStrain = inputParameters.value("computeStressStrain", true);
 	if (computeStressStrain)
@@ -527,8 +519,8 @@ std::error_code logInWaveDynamics2D(json &inputParameters, matProps &brainMatPro
 		u_data << "\n\n";
 		u_data << "Mesh Details";
 		u_data << "\n\n";
-		u_data << "order: " << inputParameters["Mesh Parameters"]["order"] << "\n";
-		u_data << "ref_levels: " << inputParameters["Mesh Parameters"]["ref_levels"] << "\n";
+		u_data << "order: " << inputParameters["Simulation Parameters"]["Mesh Parameters"]["order"] << "\n";
+		u_data << "ref_levels: " << inputParameters["Simulation Parameters"]["Mesh Parameters"]["ref_levels"] << "\n";
 		u_data << "Number of elements: " << Ω->GetNE() << "\n";
 	}
 
@@ -568,7 +560,7 @@ int determineDirichletDof(const mfem::Mesh &mesh,
 			ess_tdof_listbcx.Append(nd);
 		}
 
-		if (std::abs(pt[0] - 5.0) < ϵ /*&& std::abs(pt[1] - 2.5) < 1.0*/)
+		if (std::abs(pt[1] - 0.0) < ϵ /*&& std::abs(pt[1] - 2.5) < 1.0*/)
 		{
 			std::cout << "nd is: " << nd << "{" << pt[0] << "," << pt[1] << "}," << std::endl;
 
@@ -650,3 +642,13 @@ std::tuple<int, int, int> GetNodeInfo(const mfem::GridFunction *nodes_ptr)
 // TODO: Change geometry to CDisk.
 // TODO: Change geometry to Disk with two holes.
 // TODO: Add spatially varing Elastic Properties.
+// TODO  start to think about how you will solve the nearly incompressible deformations.
+// TODO should I model the skull as rigid, or as an elastic body. How should I handle the coupling between the two.
+// TODO Need to build with lapack, Need to compute with eigen values, and need to ise pre-conditioner.
+
+// DONE Waves in 1D
+// DONE Waves in 2D
+//  The main challenges in this project.
+//  Simulating waves for nearly incompressible materials.
+//  Simulating the contact between the skull and the interface.
+//  Modeling the ventrical.s
